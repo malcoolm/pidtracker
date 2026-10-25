@@ -174,6 +174,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             updated_at: t,
             app_version: BUILD_ID.to_string(),
             data_version: ix.as_ref().map(|ix| ix.version().to_string()).unwrap_or_default(),
+            vehicle: String::new(),
         };
         let manual = !ride.board_stop_name.is_empty();
         if let (false, Some(ix), Some(g)) = (manual, &ix, selected_group.get_untracked()) {
@@ -209,9 +210,11 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
                 }
             }
         }
-        state.set_active_ride(Some(ride.id.clone()));
+        let id = ride.id.clone();
+        state.set_active_ride(Some(id.clone()));
         state.save_ride(ride);
         state.screen.set(Screen::Home);
+        spawn_local(crate::realtime::fill_vehicle(state, id));
     };
 
     view! {

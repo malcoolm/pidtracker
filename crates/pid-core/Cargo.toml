@@ -10,3 +10,4 @@ chrono-tz.workspace = true
 postcard.workspace = true
 flate2.workspace = true
 thiserror.workspace = true
+prost = "0.14"

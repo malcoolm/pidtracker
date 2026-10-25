@@ -116,6 +116,9 @@ pub struct Ride {
     pub updated_at: DateTime<FixedOffset>,
     pub app_version: String,
     pub data_version: String,
+    /// Evidenční číslo vozu (z realtime feedu nebo ručně); prázdné = neznámé.
+    #[serde(default)]
+    pub vehicle: String,
 }
 
 impl Ride {
@@ -164,6 +167,7 @@ pub(crate) mod tests {
             updated_at: t("2026-10-26T08:05:00+01:00"),
             app_version: "0.1.0+a1b2c3d.202610251200".into(),
             data_version: "20261025-202610251200".into(),
+            vehicle: "8758".into(),
         }
     }
 

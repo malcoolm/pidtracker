@@ -59,5 +59,6 @@ Aplikace si novou verzi stáhne sama (autoupdate na bezpečné obrazovce).
   `https://data.pid.cz/PID_GTFS.zip`.
 - Jízdy: Google tabulka uživatele, list `rides` (jeden řádek = jedna jízda, smazané mají
   `deleted = TRUE`) a `people` (e-mail, přezdívka).
+- Číslo vozu: veřejný GTFS-Realtime feed poloh vozidel PID (`pid_core::realtime`), jen tramvaje/autobusy/trolejbusy.
 - Budoucí přechod na Golemio API: implementovat trait
   `pid_core::timetable::query::DepartureSource`.

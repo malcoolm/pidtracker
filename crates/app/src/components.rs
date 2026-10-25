@@ -136,6 +136,7 @@ pub fn RideRow(ride: Ride) -> impl IntoView {
     };
     let duration = ride.duration_minutes().filter(|m| *m >= 0).map(duration_label);
     let unfinished = ride.status == RideStatus::InProgress;
+    let vehicle = (!ride.vehicle.is_empty()).then(|| ride.vehicle.clone());
     view! {
         <button class="ride-row" on:click=move |_| state.screen.set(Screen::Edit(id.clone()))>
             <RouteBadge name=ride.route_short_name.clone() color=color />
@@ -144,6 +145,7 @@ pub fn RideRow(ride: Ride) -> impl IntoView {
                 <span class="ride-meta">
                     {times}
                     {duration.map(|d| format!(" · {d}"))}
+                    {vehicle.map(|v| format!(" · vůz {v}"))}
                     {who.map(|w| format!(" · {w}"))}
                     {unfinished.then(|| view! { <span class="tag">"neukončeno"</span> })}
                 </span>

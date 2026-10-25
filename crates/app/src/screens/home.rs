@@ -100,6 +100,20 @@ fn Running(ride: Ride) -> impl IntoView {
             </div>
             <p class="from">"Z " <strong>{ride.board_stop_name.clone()}</strong> " v " {hhmm(&ride.board_time)}</p>
             <p class="elapsed">{move || elapsed.get()}</p>
+            <label class="vehicle">"Číslo vozu"
+                <input type="text" inputmode="numeric" placeholder="např. 9355"
+                    prop:value=ride.vehicle.clone()
+                    on:change={
+                        let id = ride.id.clone();
+                        move |ev| {
+                            if let Some(mut r) = state.ride(&id) {
+                                r.vehicle = event_target_value(&ev).trim().to_string();
+                                r.updated_at = now_fixed();
+                                state.save_ride(r);
+                            }
+                        }
+                    } />
+            </label>
             <div class="actions">
                 <button class="primary huge" on:click=move |_| state.screen.set(Screen::Alight)>"Výstup"</button>
                 <button class="link danger" on:click=cancel_ride>

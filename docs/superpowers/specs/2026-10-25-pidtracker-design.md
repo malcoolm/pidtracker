@@ -21,7 +21,7 @@ Aplikace je PWA (instalovatelná webová aplikace), aby nebylo nutné publikovat
 
 ## 3. Ne-cíle (pro první verzi)
 
-- Žádné Golemio API ani jiná realtime data (zpoždění, polohy vozidel). Pouze statické PID open data (GTFS).
+- Žádné Golemio API ani jiná realtime data (zpoždění, polohy vozidel) pro návrhy zastávek a linek. Ty vycházejí jen ze statických PID open data (GTFS). **Výjimka (rozhodnuto uživatelem 2026-10-25):** evidenční číslo vozu se doplňuje z veřejného GTFS-Realtime feedu poloh vozidel (bez API klíče), viz 7.9.
 - Žádný vlastní backend ani server. Jen statický hosting a Google API volaná přímo z prohlížeče.
 - Žádné automatické zaznamenávání na pozadí. iOS PWA neumí sledovat polohu na pozadí, Start a Výstup jsou vždy ruční.
 - Žádné nativní aplikace a žádné obchody s aplikacemi.
@@ -208,3 +208,13 @@ Názvy zastávek a linek se ukládají denormalizovaně, aby tabulka byla čitel
 - Velikost dat celého PID (řešení: kratší horizont, viz 7.2).
 - OAuth v iOS standalone PWA (popup vs. redirect). Ověřit spikem jako první krok.
 - GitHub Pages na bezplatném účtu vyžaduje veřejný repozitář. Zdrojový kód je veřejný, osobní data jsou jen v Google Sheets.
+
+## 7.9 Číslo vozu (doplněno 2026-10-25)
+
+- Jízda má pole `vehicle` (evidenční číslo vozu), v tabulce jako poslední sloupec `vehicle`.
+- Po Startu (a znovu při Výstupu, pokud chybí) aplikace stáhne veřejný feed
+  `https://api.golemio.cz/v2/vehiclepositions/gtfsrt/vehicle_positions.pb` (~230 kB, bez klíče, CORS)
+  a podle `trip_id` zvoleného spoje doplní `label` vozu. Offline nebo bez shody zůstane prázdné.
+- Číslo jde vždy ručně přepsat (obrazovka jízdy, úprava jízdy); ruční hodnota má přednost.
+- Tramvaje, autobusy a trolejbusy mají ve feedu evidenční čísla. Metro má jen pořadí soupravy
+  a vlaky číslo vlaku – u nich se nic nedoplňuje, jen ruční zadání.

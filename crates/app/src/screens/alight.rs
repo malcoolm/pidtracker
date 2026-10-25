@@ -32,6 +32,8 @@ pub fn Alight() -> impl IntoView {
     let manual_stop = RwSignal::new(String::new());
     let alight_time = now_fixed();
 
+    // Číslo vozu se nepodařilo zjistit při nástupu (offline)? Zkusit znovu, spoj ještě jede.
+    spawn_local(crate::realtime::fill_vehicle(state, ride.id.clone()));
     spawn_local(async move {
         match current_position().await {
             Ok(f) => fix.set(Some(f)),

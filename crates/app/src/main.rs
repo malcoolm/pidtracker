@@ -3,6 +3,7 @@ mod components;
 mod config;
 mod google;
 mod interop;
+mod realtime;
 mod screens;
 mod state;
 mod storage;

@@ -242,6 +242,7 @@ h3.day { text-transform: none; letter-spacing: 0; font-size: 15px; }
 .elapsed { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 24px 0; }
 
 .home .huge { margin: 24px 0 8px; }
+.running .vehicle { max-width: 220px; margin: 0 auto 8px; text-align: left; }
 
 /* Segmentové přepínače */
 .segmented {

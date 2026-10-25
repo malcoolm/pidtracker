@@ -11,7 +11,7 @@ pub const PEOPLE_SHEET: &str = "people";
 pub const PEOPLE_HEADERS: [&str; 2] = ["email", "nickname"];
 
 /// Sloupce listu `rides`. Nové sloupce se smí přidávat jen na konec.
-pub const HEADERS: [&str; 24] = [
+pub const HEADERS: [&str; 25] = [
     "id",
     "person",
     "board_stop_id",
@@ -36,8 +36,9 @@ pub const HEADERS: [&str; 24] = [
     "updated_at",
     "app_version",
     "data_version",
+    "vehicle",
 ];
-pub const LAST_COL: &str = "X";
+pub const LAST_COL: &str = "Y";
 
 /// Písmeno sloupce tabulky (1 → A, 27 → AA).
 pub fn column_letter(mut n: usize) -> String {
@@ -113,6 +114,7 @@ pub fn to_row(r: &Ride) -> Vec<String> {
         r.updated_at.to_rfc3339(),
         r.app_version.clone(),
         r.data_version.clone(),
+        r.vehicle.clone(),
     ]
 }
 
@@ -190,6 +192,7 @@ pub fn from_row(headers: &[String], row: &[String]) -> Result<Ride, RowError> {
         updated_at: c.time("updated_at")?.unwrap_or(board_time),
         app_version: c.get("app_version").to_string(),
         data_version: c.get("data_version").to_string(),
+        vehicle: c.get("vehicle").to_string(),
     })
 }
 
@@ -280,8 +283,9 @@ mod row_tests {
 
     #[test]
     fn headers_len_matches_last_col() {
-        assert_eq!(HEADERS.len(), 24);
-        assert_eq!(LAST_COL, "X");
+        assert_eq!(HEADERS.len(), 25);
+        assert_eq!(LAST_COL, "Y");
+        assert_eq!(HEADERS[24], "vehicle");
     }
 
     #[test]
@@ -326,6 +330,7 @@ mod row_tests {
         let mut r = sample_ride();
         r.app_version = String::new();
         r.data_version = String::new();
+        r.vehicle = String::new();
         let mut row = to_row(&r);
         row.truncate(22);
         let p = parse_rows(&[header_row(), row]);
@@ -394,5 +399,26 @@ mod robustness_tests {
         assert!(headers_valid(&header_row()));
         assert!(headers_valid(&[]));
         assert!(!headers_valid(&to_row(&sample_ride())));
+    }
+}
+
+#[cfg(test)]
+mod vehicle_tests {
+    use super::*;
+    use crate::ride::tests::sample_ride;
+
+    #[test]
+    fn old_sheet_without_vehicle_column_parses() {
+        // Tabulka založená před přidáním sloupce vehicle.
+        let headers: Vec<String> = HEADERS[..24].iter().map(|s| s.to_string()).collect();
+        let mut row = to_row(&sample_ride());
+        row.truncate(24);
+        let p = parse_rows(&[headers, row]);
+        assert_eq!(p.rides[0].1.vehicle, "");
+    }
+
+    #[test]
+    fn vehicle_is_last_column() {
+        assert_eq!(to_row(&sample_ride())[24], "8758");
     }
 }
