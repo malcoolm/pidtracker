@@ -3,7 +3,7 @@
 //! `version.json` se kontroluje při startu, při návratu do popředí a každých 15 minut.
 //! Nová verze se načte (reload) jen na bezpečné obrazovce, nikdy uprostřed vyplňování.
 
-use std::cell::Cell;
+use std::cell::RefCell;
 
 use gloo_net::http::Request;
 use gloo_timers::future::TimeoutFuture;
@@ -12,13 +12,18 @@ use leptos::task::spawn_local;
 use serde::Deserialize;
 
 use crate::config::{APP_VERSION, BUILD_ID};
+use crate::interop::{session_get, session_set};
 use crate::state::{AppState, Screen};
 use crate::util::{keys, ls_get_str, ls_set_str, reload};
 
 const CHECK_INTERVAL_MS: u32 = 15 * 60 * 1000;
 
+/// sessionStorage: build, kvůli kterému už jsme v této relaci přenačítali (pojistka proti smyčce,
+/// když CDN ještě chvíli vrací starou stránku).
+const RELOADED_FOR: &str = "pt.reloaded_for";
+
 thread_local! {
-    static PENDING_UPDATE: Cell<bool> = const { Cell::new(false) };
+    static PENDING_UPDATE: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
 #[derive(Deserialize)]
@@ -53,16 +58,19 @@ pub async fn check_now() -> UpdateCheck {
         UpdateCheck::UpToDate
     } else {
         crate::interop::sw_update().await;
-        PENDING_UPDATE.with(|p| p.set(true));
+        PENDING_UPDATE.with(|p| *p.borrow_mut() = Some(info.build_id.clone()));
         UpdateCheck::Available(info.build_id)
     }
 }
 
-/// Přenačte aplikaci, pokud čeká aktualizace a obrazovka je bezpečná.
+/// Přenačte aplikaci, pokud čeká aktualizace a obrazovka je bezpečná (pro každý build nejvýš jednou).
 pub fn apply_if_safe(state: &AppState) {
-    if PENDING_UPDATE.with(|p| p.get()) && is_safe(state) {
-        reload();
+    let Some(target) = PENDING_UPDATE.with(|p| p.borrow().clone()) else { return };
+    if !is_safe(state) || session_get(RELOADED_FOR).as_deref() == Some(target.as_str()) {
+        return;
     }
+    session_set(RELOADED_FOR, &target);
+    reload();
 }
 
 pub fn install(state: AppState) {

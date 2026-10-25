@@ -3,4 +3,8 @@
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_ID: &str = env!("PIDTRACKER_BUILD_ID");
 pub const BUILT_AT: &str = env!("PIDTRACKER_BUILT_AT");
-pub const GOOGLE_CLIENT_ID: Option<&str> = option_env!("PIDTRACKER_GOOGLE_CLIENT_ID");
+/// Client ID z buildu; prázdná hodnota (nenastavená proměnná v CI) se bere jako chybějící.
+pub const GOOGLE_CLIENT_ID: Option<&str> = match option_env!("PIDTRACKER_GOOGLE_CLIENT_ID") {
+    Some(id) if !id.is_empty() => Some(id),
+    _ => None,
+};

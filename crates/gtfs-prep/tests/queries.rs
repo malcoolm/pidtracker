@@ -121,3 +121,13 @@ fn next_per_direction_keeps_earliest() {
     assert_eq!(n.len(), 1);
     assert_eq!(n[0].trip_gtfs_id, "T22b");
 }
+
+#[test]
+fn next_day_service_before_midnight() {
+    // Neděle 23:55: pondělní spoj kódovaný 00:05:00 (služba WD) musí být v okně +30 min.
+    let ix = index();
+    let d = ix.departures(group(&ix, "Náměstí Míru"), prague(2026, 10, 25, 23, 55), 5, 30);
+    let ids: Vec<_> = d.iter().map(|x| x.trip_gtfs_id.as_str()).collect();
+    assert!(ids.contains(&"T22m"), "{ids:?}");
+    assert_eq!(d.iter().find(|x| x.trip_gtfs_id == "T22m").unwrap().time.format("%Y-%m-%d %H:%M").to_string(), "2026-10-26 00:05");
+}

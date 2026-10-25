@@ -60,8 +60,33 @@ pub fn make_build_id(version: &str, git_hash: &str, now: DateTime<Utc>) -> Strin
     format!("{version}+{git_hash}.{}", now.format("%Y%m%d%H%M"))
 }
 
-pub fn patch_sw(src: &str, build_id: &str) -> String {
-    src.replace("__BUILD_ID__", build_id)
+pub fn patch_sw(src: &str, build_id: &str, precache: &[String]) -> String {
+    let list = serde_json::to_string(precache).expect("seznam řetězců jde vždy serializovat");
+    src.replace("__BUILD_ID__", build_id).replace("__PRECACHE__", &list)
+}
+
+/// Soubory aplikace, které si service worker uloží při instalaci (bez dat, sw.js a version.json).
+/// Cesty jsou relativní k umístění sw.js; "./" je samotná stránka.
+pub fn precache_list(dist: &Path) -> Result<Vec<String>> {
+    fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                walk(&path, base, out)?;
+            } else {
+                let rel = path.strip_prefix(base)?.to_string_lossy().replace('\\', "/");
+                let hidden = rel.split('/').any(|part| part.starts_with('.'));
+                if !hidden && rel != "sw.js" && rel != "version.json" && !rel.starts_with("data/") {
+                    out.push(rel);
+                }
+            }
+        }
+        Ok(())
+    }
+    let mut out = vec!["./".to_string()];
+    walk(dist, dist, &mut out)?;
+    out[1..].sort();
+    Ok(out)
 }
 
 fn git_hash() -> String {
@@ -107,7 +132,8 @@ fn dist(public_url: &str, data: DataSource) -> Result<()> {
 
     let sw_path = dist.join("sw.js");
     let sw = std::fs::read_to_string(&sw_path).context("dist/sw.js chybí")?;
-    std::fs::write(&sw_path, patch_sw(&sw, &build_id))?;
+    let precache = precache_list(&dist)?;
+    std::fs::write(&sw_path, patch_sw(&sw, &build_id, &precache))?;
 
     let source = match data {
         DataSource::None => None,
@@ -148,6 +174,48 @@ mod tests {
 
     #[test]
     fn sw_placeholder_replaced() {
-        assert_eq!(patch_sw("const V='__BUILD_ID__';", "X"), "const V='X';");
+        assert_eq!(
+            patch_sw("const V='__BUILD_ID__'; const P=__PRECACHE__;", "X", &["./".into(), "a.js".into()]),
+            r#"const V='X'; const P=["./","a.js"];"#
+        );
+    }
+
+    #[test]
+    fn precache_list_covers_app_shell_only() {
+        let dir = std::env::temp_dir().join(format!("pt-precache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for f in [
+            "index.html",
+            "app-1.js",
+            "app-1_bg.wasm",
+            "style-2.css",
+            "manifest.webmanifest",
+            "icons/icon-192.png",
+            "snippets/app-3/inline0.js",
+            "sw.js",
+            "version.json",
+            "data/manifest.json",
+            "data/timetable-x.pidt",
+            ".trunk-lock",
+        ] {
+            let p = dir.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        }
+        let list = precache_list(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(
+            list,
+            vec![
+                "./",
+                "app-1.js",
+                "app-1_bg.wasm",
+                "icons/icon-192.png",
+                "index.html",
+                "manifest.webmanifest",
+                "snippets/app-3/inline0.js",
+                "style-2.css",
+            ]
+        );
     }
 }

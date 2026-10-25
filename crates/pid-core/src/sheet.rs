@@ -63,6 +63,16 @@ pub struct ParsedRows {
     /// (číslo řádku v tabulce od 1, jízda)
     pub rides: Vec<(u32, Ride)>,
     pub skipped: u32,
+    /// id → číslo řádku pro všechny řádky s vyplněným id, i nečitelné (aby se přepsaly, ne zdvojily).
+    pub row_ids: HashMap<String, u32>,
+    /// První řádek je skutečně hlavička (list nebyl seřazen i s ní). Prázdný list je v pořádku.
+    pub header_ok: bool,
+}
+
+/// Řádek vypadá jako hlavička listu `rides` (nebo je prázdný).
+pub fn headers_valid(row: &[String]) -> bool {
+    let has = |name: &str| row.iter().any(|c| c.trim() == name);
+    row.iter().all(|c| c.trim().is_empty()) || (has("id") && has("board_time"))
 }
 
 fn opt_str(v: &Option<String>) -> String {
@@ -185,14 +195,23 @@ pub fn from_row(headers: &[String], row: &[String]) -> Result<Ride, RowError> {
 
 /// První řádek jsou hlavičky; nečitelné řádky se přeskočí a spočítají.
 pub fn parse_rows(values: &[Vec<String>]) -> ParsedRows {
-    let mut out = ParsedRows { rides: Vec::new(), skipped: 0 };
+    let mut out = ParsedRows { rides: Vec::new(), skipped: 0, row_ids: HashMap::new(), header_ok: true };
     let Some((headers, rows)) = values.split_first() else { return out };
+    out.header_ok = headers_valid(headers);
+    if !out.header_ok {
+        return out;
+    }
+    let id_col = headers.iter().position(|h| h.trim() == "id");
     for (i, row) in rows.iter().enumerate() {
         if row.iter().all(|c| c.trim().is_empty()) {
             continue;
         }
+        let row_no = i as u32 + 2;
+        if let Some(id) = id_col.and_then(|c| row.get(c)).map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            out.row_ids.insert(id.to_string(), row_no);
+        }
         match from_row(headers, row) {
-            Ok(ride) => out.rides.push((i as u32 + 2, ride)),
+            Ok(ride) => out.rides.push((row_no, ride)),
             Err(_) => out.skipped += 1,
         }
     }
@@ -338,5 +357,42 @@ mod column_tests {
         assert_eq!(column_letter(26), "Z");
         assert_eq!(column_letter(27), "AA");
         assert_eq!(column_letter(53), "BA");
+    }
+}
+
+#[cfg(test)]
+mod robustness_tests {
+    use super::*;
+    use crate::ride::tests::sample_ride;
+
+    fn header_row() -> Vec<String> {
+        HEADERS.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn parse_rows_records_ids_of_unparseable_rows() {
+        let mut broken = to_row(&sample_ride());
+        broken[0] = "zz".into();
+        broken[10] = "25.10.2026 8:00".into(); // ručně přepsaný čas
+        let p = parse_rows(&[header_row(), to_row(&sample_ride()), broken]);
+        assert_eq!(p.skipped, 1);
+        assert_eq!(p.row_ids.get("zz"), Some(&3));
+        assert_eq!(p.row_ids.get(&sample_ride().id), Some(&2));
+    }
+
+    #[test]
+    fn header_validation() {
+        assert!(parse_rows(&[]).header_ok);
+        assert!(parse_rows(&[header_row()]).header_ok);
+        // seřazeno i s hlavičkou: první řádek jsou data
+        let p = parse_rows(&[to_row(&sample_ride()), header_row()]);
+        assert!(!p.header_ok);
+    }
+
+    #[test]
+    fn headers_present_check() {
+        assert!(headers_valid(&header_row()));
+        assert!(headers_valid(&[]));
+        assert!(!headers_valid(&to_row(&sample_ride())));
     }
 }

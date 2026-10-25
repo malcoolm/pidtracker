@@ -26,7 +26,7 @@ export function gisRequestToken(clientId, scope, hint) {
       error_callback: (e) => reject((e && (e.message || e.type)) || 'přihlášení se nezdařilo'),
     });
     const opts = {};
-    if (hint) opts.hint = hint;
+    if (hint) { opts.login_hint = hint; opts.hint = hint; }
     client.requestAccessToken(opts);
   });
 }
@@ -54,6 +54,19 @@ export function onVisible(cb) {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cb(); });
 }
 
+// Požádá o trvalé úložiště, aby prohlížeč nesmazal IndexedDB s neodeslanými jízdami.
+export function persistStorage() {
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
+}
+
+export function sessionGet(key) {
+  try { return sessionStorage.getItem(key); } catch (_) { return null; }
+}
+
+export function sessionSet(key, value) {
+  try { sessionStorage.setItem(key, value); } catch (_) {}
+}
+
 export function onOnline(cb) {
   window.addEventListener('online', () => cb());
 }
@@ -76,6 +89,15 @@ extern "C" {
 
     #[wasm_bindgen(js_name = onVisible)]
     fn on_visible_js(cb: &Closure<dyn FnMut()>);
+
+    #[wasm_bindgen(js_name = persistStorage)]
+    pub fn persist_storage();
+
+    #[wasm_bindgen(js_name = sessionGet)]
+    pub fn session_get(key: &str) -> Option<String>;
+
+    #[wasm_bindgen(js_name = sessionSet)]
+    pub fn session_set(key: &str, value: &str);
 
     #[wasm_bindgen(js_name = onOnline)]
     fn on_online_js(cb: &Closure<dyn FnMut()>);

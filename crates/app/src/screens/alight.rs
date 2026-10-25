@@ -73,6 +73,13 @@ pub fn Alight() -> impl IntoView {
         }
     });
 
+    // Bez zvolené zastávky nejde jízdu uložit (jinak by vznikla jízda bez cíle).
+    let can_finish = move || match choice.get() {
+        Some(Choice::Manual) => !manual_stop.get().trim().is_empty(),
+        Some(_) => true,
+        None => false,
+    };
+
     let finish = move |transfer: bool| {
         let Some(mut r) = state.current_ride() else { return };
         let ix = state.tt.get_untracked().index();
@@ -156,12 +163,22 @@ pub fn Alight() -> impl IntoView {
                 <GroupPicker
                     candidates=nearby
                     selected=picked_group
-                    on_pick=Callback::new(move |g| choice.set(Some(Choice::Group(g))))
+                    on_pick=Callback::new(move |g| {
+                        manual_stop.set(String::new());
+                        choice.set(Some(Choice::Group(g)));
+                    })
                 />
+                <input type="text" placeholder="Zastávka není v seznamu? Napište název"
+                    prop:value=move || manual_stop.get()
+                    on:input=move |ev| {
+                        manual_stop.set(event_target_value(&ev));
+                        picked_group.set(None);
+                        choice.set(Some(Choice::Manual));
+                    } />
             </Show>
             <div class="actions sticky">
-                <button class="primary huge" on:click=move |_| finish(false)>"Hotovo"</button>
-                <button class="secondary big" on:click=move |_| finish(true)>"Přestoupit"</button>
+                <button class="primary huge" disabled=move || !can_finish() on:click=move |_| finish(false)>"Hotovo"</button>
+                <button class="secondary big" disabled=move || !can_finish() on:click=move |_| finish(true)>"Přestoupit"</button>
             </div>
         </section>
     }

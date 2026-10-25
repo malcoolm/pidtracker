@@ -125,6 +125,11 @@ async fn run_once(state: AppState) -> Result<(), SheetsError> {
     // Pull a sloučení (na čerstvém snímku lokálních jízd, bez await mezi čtením a zápisem).
     let values = client.get_values(&format!("{RIDES_SHEET}!A:ZZ")).await?;
     let parsed = parse_rows(&values);
+    if !parsed.header_ok {
+        return Err(SheetsError::Other(
+            "První řádek listu rides není hlavička (list byl asi seřazen i s ní). Vraťte hlavičku na řádek 1.".into(),
+        ));
+    }
     let pending = storage::pending_ids().await.map_err(|e| SheetsError::Other(e.0))?;
     let mut local: HashMap<String, Ride> =
         state.rides.get_untracked().into_iter().map(|r| (r.id.clone(), r)).collect();
@@ -138,7 +143,7 @@ async fn run_once(state: AppState) -> Result<(), SheetsError> {
 
     // Push fronty.
     let to_push: Vec<Ride> = pending.iter().filter_map(|id| local.get(id).cloned()).collect();
-    let writes = plan_push(&parsed.rides, &to_push);
+    let writes = plan_push(&parsed.row_ids, &to_push);
     let mut updates = Vec::new();
     let mut appends = Vec::new();
     for w in &writes {

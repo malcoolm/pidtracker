@@ -20,3 +20,10 @@ jízdních řádů) a ručně přes **Actions → Build & deploy → Run workflo
 
 - `https://<uživatel>.github.io/pidtracker/version.json` vrací JSON s `build_id`.
 - Patička aplikace ukazuje stejné `build_id`.
+
+## Pozor na týdenní aktualizaci jízdních řádů
+
+GitHub automaticky **vypne plánované spouštění workflow po 60 dnech bez aktivity**
+v repozitáři. Jízdní řády PID platí jen 14 dní, takže by aplikace začala hlásit prošlá
+data. Pokud se to stane, v **Actions → Build & deploy** klikněte na **Enable workflow**
+(a případně **Run workflow**). Aplikace na blížící se konec platnosti upozorní 2 dny předem.

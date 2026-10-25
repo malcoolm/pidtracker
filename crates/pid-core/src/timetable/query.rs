@@ -220,7 +220,8 @@ impl DepartureSource for TimetableIndex {
                     let offset = self.tt.profiles[profile_idx as usize].offsets[pos] as i64;
                     let (lo, hi) = self.profile_trips[profile_idx as usize];
                     let trips = &self.tt.trips[lo..hi];
-                    for service_date in [today - Duration::days(1), today] {
+                    // Včerejší služba (časy ≥ 24 h), dnešní a zítřejší (okno přes půlnoc).
+                    for service_date in [today - Duration::days(1), today, today + Duration::days(1)] {
                         let base = gtfs_instant(service_date, 0);
                         let start_min = (from - base).num_seconds() - offset;
                         let start_max = (to - base).num_seconds() - offset;

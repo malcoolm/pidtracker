@@ -66,11 +66,11 @@ pub enum SheetWrite {
 }
 
 /// Pro každou jízdu k odeslání: přepsat její řádek (podle čerstvě načtené tabulky), nebo připojit.
-pub fn plan_push(remote: &[(u32, Ride)], to_push: &[Ride]) -> Vec<SheetWrite> {
-    let rows: HashMap<&str, u32> = remote.iter().map(|(row, r)| (r.id.as_str(), *row)).collect();
+/// `row_ids` = id → řádek z čerstvě načtené tabulky (`ParsedRows::row_ids`, včetně nečitelných řádků).
+pub fn plan_push(row_ids: &HashMap<String, u32>, to_push: &[Ride]) -> Vec<SheetWrite> {
     to_push
         .iter()
-        .map(|ride| match rows.get(ride.id.as_str()) {
+        .map(|ride| match row_ids.get(&ride.id) {
             Some(&row) => SheetWrite::Update { row, ride: ride.clone() },
             None => SheetWrite::Append { ride: ride.clone() },
         })
@@ -163,9 +163,13 @@ mod tests {
         assert_eq!(local["a"].route_short_name, "9");
     }
 
+    fn ids(pairs: &[(&str, u32)]) -> HashMap<String, u32> {
+        pairs.iter().map(|(id, row)| (id.to_string(), *row)).collect()
+    }
+
     #[test]
     fn push_updates_existing_and_appends_new() {
-        let w = plan_push(&[(7, ride("a"))], &[ride("a"), ride("b")]);
+        let w = plan_push(&ids(&[("a", 7)]), &[ride("a"), ride("b")]);
         assert_eq!(w.len(), 2);
         assert!(matches!(&w[0], SheetWrite::Update { row: 7, .. }));
         assert!(matches!(&w[1], SheetWrite::Append { ride } if ride.id == "b"));
@@ -173,8 +177,14 @@ mod tests {
 
     #[test]
     fn push_uses_fresh_row_numbers() {
-        let w = plan_push(&[(3, ride("x")), (12, ride("a"))], &[ride("a")]);
+        let w = plan_push(&ids(&[("x", 3), ("a", 12)]), &[ride("a")]);
         assert!(matches!(&w[0], SheetWrite::Update { row: 12, .. }));
+    }
+
+    #[test]
+    fn push_overwrites_unparseable_row_with_same_id() {
+        let w = plan_push(&ids(&[("zz", 3)]), &[ride("zz")]);
+        assert!(matches!(&w[0], SheetWrite::Update { row: 3, .. }));
     }
 
     #[test]

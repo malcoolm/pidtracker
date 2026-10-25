@@ -14,6 +14,7 @@ mod util;
 fn main() {
     console_error_panic_hook::set_once();
     register_service_worker();
+    interop::persist_storage();
     leptos::mount::mount_to_body(app::App);
 }
 

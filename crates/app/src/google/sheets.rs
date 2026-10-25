@@ -129,7 +129,9 @@ impl SheetsClient {
         let missing: Vec<Value> = sheets
             .iter()
             .filter(|(name, _)| !existing.iter().any(|e| e == name))
-            .map(|(name, _)| json!({ "addSheet": { "properties": { "title": name } } }))
+            .map(|(name, _)| {
+                json!({ "addSheet": { "properties": { "title": name, "gridProperties": { "frozenRowCount": 1 } } } })
+            })
             .collect();
         if !missing.is_empty() {
             self.post_json(&self.url(":batchUpdate"), &json!({ "requests": missing })).await?;
@@ -137,6 +139,13 @@ impl SheetsClient {
         let mut updates = Vec::new();
         for (name, headers) in sheets {
             let current = self.get_values(&format!("{name}!1:1")).await?.into_iter().next().unwrap_or_default();
+            // Řádek 1 s daty místo hlavičky (seřazeno i s ní): nic nepsat, ať nepoškodíme data.
+            let has_any = current.iter().any(|c| !c.trim().is_empty());
+            if has_any && !current.iter().any(|c| c.trim() == headers[0]) {
+                return Err(SheetsError::Other(format!(
+                    "První řádek listu {name} není hlavička (list byl asi seřazen i s ní). Vraťte hlavičku na řádek 1."
+                )));
+            }
             let add: Vec<String> =
                 headers.iter().filter(|h| !current.iter().any(|c| c == *h)).map(|h| h.to_string()).collect();
             if !add.is_empty() {

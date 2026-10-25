@@ -82,6 +82,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
     let manual_line = RwSignal::new(String::new());
     let manual_kind = RwSignal::new(None::<u16>);
     let manual_stop = RwSignal::new(String::new());
+    let manual_stop_open = RwSignal::new(false);
 
     if group.is_none() {
         spawn_local(async move {
@@ -137,8 +138,14 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
         stop_ok && line_ok
     };
 
+    let started = RwSignal::new(false);
     let start = move |_| {
+        // Ochrana proti dvojitému klepnutí (dvě probíhající jízdy).
+        if started.get_untracked() {
+            return;
+        }
         let Some(me) = state.me.get_untracked() else { return };
+        started.set(true);
         let ix = state.tt.get_untracked().index();
         let t = now_fixed();
         let f = fix.get_untracked();
@@ -168,14 +175,15 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             app_version: BUILD_ID.to_string(),
             data_version: ix.as_ref().map(|ix| ix.version().to_string()).unwrap_or_default(),
         };
-        if let (Some(ix), Some(g)) = (&ix, selected_group.get_untracked()) {
+        let manual = !ride.board_stop_name.is_empty();
+        if let (false, Some(ix), Some(g)) = (manual, &ix, selected_group.get_untracked()) {
             ride.board_stop_name = ix.tt.group_name(g).to_string();
             ride.board_stop_id = ix.tt.stops[ix.group_first_stop(g) as usize].gtfs_id.clone();
         }
         match choice.get_untracked() {
             LineChoice::Departure(i) => {
                 let d = departures.with_untracked(|d| d[i].clone());
-                if let Some(ix) = &ix {
+                if let (false, Some(ix)) = (manual, &ix) {
                     ride.board_stop_id = ix.tt.stops[d.stop as usize].gtfs_id.clone();
                 }
                 ride.route_id = d.route_id;
@@ -233,9 +241,24 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
                     selected=selected_group
                     on_pick=Callback::new(move |_| {
                         at.set(now());
+                        manual_stop.set(String::new());
+                        manual_stop_open.set(false);
                         choice.set(LineChoice::Departure(0));
                     })
                 />
+                <Show
+                    when=move || manual_stop_open.get()
+                    fallback=move || view! {
+                        <button class="link small" on:click=move |_| manual_stop_open.set(true)>"Zastávka není v seznamu? Zadat ručně"</button>
+                    }
+                >
+                    <input type="text" placeholder="Název zastávky"
+                        prop:value=move || manual_stop.get()
+                        on:input=move |ev| {
+                            manual_stop.set(event_target_value(&ev));
+                            selected_group.set(None);
+                        } />
+                </Show>
             </Show>
 
             <h3>"Linka"</h3>
