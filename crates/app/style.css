@@ -279,6 +279,11 @@ h3.day { text-transform: none; letter-spacing: 0; font-size: 15px; }
 .bar span { display: block; height: 100%; border-radius: 5px; }
 .bar-value { text-align: right; font-variant-numeric: tabular-nums; }
 .top { margin: 0; padding-left: 22px; }
+.counts { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+.counts li { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.counts li:last-child { border-bottom: none; }
+.count-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.count-value { font-variant-numeric: tabular-nums; font-weight: 600; }
 .chart { width: 100%; margin-top: 12px; }
 .chart-bar { fill: var(--accent); }
 .chart-label, .chart-value { fill: var(--muted); font-size: 8px; }

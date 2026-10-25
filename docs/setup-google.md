@@ -48,7 +48,7 @@ nastavení na 10–15 minut.
 
 1. Na <https://sheets.google.com> založte **prázdnou** tabulku, např. `PID jízdy`.
 2. **Sdílet** → přidejte e-mail syna s rolí **Editor**.
-3. Při prvním spuštění aplikace vložte odkaz na tabulku. Listy `rides` a `people`
+3. ID tabulky je pevně v kódu (`crates/app/src/config.rs`, `SHEET_ID`). Listy `rides` a `people`
    s hlavičkami si aplikace založí sama.
 4. Na listy `rides` a `people` nepište vzorce ani nepřeskupujte sloupce. Vlastní
    analýzy dělejte na jiných listech. Řádky v `rides` lze řadit a filtrovat, aplikace

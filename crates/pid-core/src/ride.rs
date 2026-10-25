@@ -119,6 +119,9 @@ pub struct Ride {
     /// Evidenční číslo vozu (z realtime feedu nebo ručně); prázdné = neznámé.
     #[serde(default)]
     pub vehicle: String,
+    /// Dopravce spoje (z jízdního řádu); prázdné = neznámý.
+    #[serde(default)]
+    pub operator: String,
 }
 
 impl Ride {
@@ -168,6 +171,7 @@ pub(crate) mod tests {
             app_version: "0.1.0+a1b2c3d.202610251200".into(),
             data_version: "20261025-202610251200".into(),
             vehicle: "8758".into(),
+            operator: "Dopravní podnik hl. m. Prahy, akciová společnost".into(),
         }
     }
 

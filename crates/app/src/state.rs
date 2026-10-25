@@ -67,7 +67,7 @@ impl AppState {
             tt: RwSignal::new(TtState::Loading),
             rides: RwSignal::new(Vec::new()),
             me: RwSignal::new(ls_get_str(keys::ME)),
-            sheet_id: RwSignal::new(ls_get_str(keys::SHEET_ID)),
+            sheet_id: RwSignal::new(Some(crate::config::SHEET_ID.to_string())),
             nicknames: RwSignal::new(ls_get(keys::NICKNAMES).unwrap_or_default()),
             sync: RwSignal::new(SyncStatus::Idle { last: ls_get_str(keys::LAST_SYNC) }),
             screen: RwSignal::new(Screen::Home),

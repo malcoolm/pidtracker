@@ -77,6 +77,8 @@ pub struct Trip {
     /// Odjezd z první zastávky v sekundách od „poledne − 12 h“ (může být ≥ 24 h).
     pub start: u32,
     pub headsign: u32,
+    /// Dopravce spoje (index do `strings`), pokud ho feed uvádí.
+    pub operator: Option<u32>,
 }
 
 /// Bitmapa dnů od `feed_start` (bit i = feed_start + i dní), kdy služba jede.

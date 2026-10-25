@@ -1,0 +1,4 @@
+route_id,route_licence_number,sub_agency_id,sub_agency_name
+L22,100022,1,"Dopravní podnik hl. m. Prahy, akciová společnost"
+L22,100022,2,"Testovací dopravce s.r.o."
+L991,199991,1,"Dopravní podnik hl. m. Prahy, akciová společnost"

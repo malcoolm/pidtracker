@@ -11,7 +11,7 @@ pub const PEOPLE_SHEET: &str = "people";
 pub const PEOPLE_HEADERS: [&str; 2] = ["email", "nickname"];
 
 /// Sloupce listu `rides`. Nové sloupce se smí přidávat jen na konec.
-pub const HEADERS: [&str; 25] = [
+pub const HEADERS: [&str; 26] = [
     "id",
     "person",
     "board_stop_id",
@@ -37,8 +37,9 @@ pub const HEADERS: [&str; 25] = [
     "app_version",
     "data_version",
     "vehicle",
+    "operator",
 ];
-pub const LAST_COL: &str = "Y";
+pub const LAST_COL: &str = "Z";
 
 /// Písmeno sloupce tabulky (1 → A, 27 → AA).
 pub fn column_letter(mut n: usize) -> String {
@@ -115,6 +116,7 @@ pub fn to_row(r: &Ride) -> Vec<String> {
         r.app_version.clone(),
         r.data_version.clone(),
         r.vehicle.clone(),
+        r.operator.clone(),
     ]
 }
 
@@ -193,6 +195,7 @@ pub fn from_row(headers: &[String], row: &[String]) -> Result<Ride, RowError> {
         app_version: c.get("app_version").to_string(),
         data_version: c.get("data_version").to_string(),
         vehicle: c.get("vehicle").to_string(),
+        operator: c.get("operator").to_string(),
     })
 }
 
@@ -283,8 +286,9 @@ mod row_tests {
 
     #[test]
     fn headers_len_matches_last_col() {
-        assert_eq!(HEADERS.len(), 25);
-        assert_eq!(LAST_COL, "Y");
+        assert_eq!(HEADERS.len(), 26);
+        assert_eq!(LAST_COL, "Z");
+        assert_eq!(HEADERS[25], "operator");
         assert_eq!(HEADERS[24], "vehicle");
     }
 
@@ -331,6 +335,7 @@ mod row_tests {
         r.app_version = String::new();
         r.data_version = String::new();
         r.vehicle = String::new();
+        r.operator = String::new();
         let mut row = to_row(&r);
         row.truncate(22);
         let p = parse_rows(&[header_row(), row]);

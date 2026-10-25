@@ -175,6 +175,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             app_version: BUILD_ID.to_string(),
             data_version: ix.as_ref().map(|ix| ix.version().to_string()).unwrap_or_default(),
             vehicle: String::new(),
+            operator: String::new(),
         };
         let manual = !ride.board_stop_name.is_empty();
         if let (false, Some(ix), Some(g)) = (manual, &ix, selected_group.get_untracked()) {
@@ -192,6 +193,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
                 ride.route_type = Some(d.route_type);
                 ride.headsign = d.headsign;
                 ride.trip_id = d.trip_gtfs_id;
+                ride.operator = d.operator;
                 ride.pattern_id = Some(d.pattern);
             }
             LineChoice::Manual => {

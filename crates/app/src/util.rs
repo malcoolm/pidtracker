@@ -65,7 +65,6 @@ pub fn ls_set<T: Serialize>(key: &str, value: &T) {
 pub mod keys {
     pub const TOKEN: &str = "pt.token";
     pub const ME: &str = "pt.me";
-    pub const SHEET_ID: &str = "pt.sheet_id";
     pub const NICKNAMES: &str = "pt.nicknames";
     pub const ACTIVE_RIDE: &str = "pt.active_ride_id";
     pub const LAST_SEEN_BUILD: &str = "pt.last_seen_build";

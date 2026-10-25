@@ -16,7 +16,7 @@ pub const PID_GTFS_URL: &str = "https://data.pid.cz/PID_GTFS.zip";
 pub const MAX_BYTES: u64 = 15 * 1024 * 1024;
 
 /// Soubory GTFS, které potřebujeme (shapes.txt má 144 MB a nepotřebujeme ho).
-const NEEDED: [&str; 7] = [
+const NEEDED: [&str; 8] = [
     "feed_info.txt",
     "routes.txt",
     "stops.txt",
@@ -24,6 +24,7 @@ const NEEDED: [&str; 7] = [
     "stop_times.txt",
     "calendar.txt",
     "calendar_dates.txt",
+    "route_sub_agencies.txt",
 ];
 
 pub enum FeedSource {
@@ -241,22 +242,47 @@ pub fn build_timetable(gtfs_dir: &Path, generated_at: DateTime<Utc>) -> Result<T
     }
 
     // trips
+    // dopravci: (route_id, sub_agency_id) → název (soubor je volitelný, PID ho má)
+    let mut operators: HashMap<(String, String), u32> = HashMap::new();
+    if gtfs_dir.join("route_sub_agencies.txt").exists() {
+        let mut csv = Csv::open(gtfs_dir, "route_sub_agencies.txt")?;
+        let (c_route, c_sub, c_name) =
+            (csv.col("route_id")?, csv.col("sub_agency_id")?, csv.col("sub_agency_name")?);
+        for rec in csv.reader.records() {
+            let rec = rec?;
+            let name = field(&rec, c_name);
+            if !name.is_empty() {
+                let key = (field(&rec, c_route).to_string(), field(&rec, c_sub).to_string());
+                operators.insert(key, strings.intern(name));
+            }
+        }
+    }
+
+    // trips
     struct TripInfo {
         route: u32,
         service: u32,
         headsign: u32,
+        operator: Option<u32>,
     }
     let mut csv = Csv::open(gtfs_dir, "trips.txt")?;
-    let (c_route, c_sid, c_tid, c_head) =
-        (csv.col("route_id")?, csv.col("service_id")?, csv.col("trip_id")?, csv.opt_col("trip_headsign"));
+    let (c_route, c_sid, c_tid, c_head, c_sub) = (
+        csv.col("route_id")?,
+        csv.col("service_id")?,
+        csv.col("trip_id")?,
+        csv.opt_col("trip_headsign"),
+        csv.opt_col("sub_agency_id"),
+    );
     let mut trip_infos: HashMap<String, TripInfo> = HashMap::new();
     for rec in csv.reader.records() {
         let rec = rec?;
-        let Some(&route) = route_index.get(field(&rec, c_route)) else { continue };
+        let route_id = field(&rec, c_route);
+        let Some(&route) = route_index.get(route_id) else { continue };
         let service = service_of(field(&rec, c_sid), &mut services);
+        let operator = operators.get(&(route_id.to_string(), opt_field(&rec, c_sub).to_string())).copied();
         trip_infos.insert(
             field(&rec, c_tid).to_string(),
-            TripInfo { route, service, headsign: strings.intern(opt_field(&rec, c_head)) },
+            TripInfo { route, service, headsign: strings.intern(opt_field(&rec, c_head)), operator },
         );
     }
 
@@ -325,7 +351,14 @@ pub fn build_timetable(gtfs_dir: &Path, generated_at: DateTime<Utc>) -> Result<T
             profiles.push(Profile { pattern, offsets });
             profiles.len() as u32 - 1
         });
-        trips.push(Trip { gtfs_id: trip_id, profile, service: info.service, start, headsign: info.headsign });
+        trips.push(Trip {
+            gtfs_id: trip_id,
+            profile,
+            service: info.service,
+            start,
+            headsign: info.headsign,
+            operator: info.operator,
+        });
     }
     trips.sort_by_key(|t| (t.profile, t.start));
 

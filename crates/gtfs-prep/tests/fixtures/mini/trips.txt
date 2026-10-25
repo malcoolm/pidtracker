@@ -1,6 +1,6 @@
-route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id
-L22,WD,T22b,"Nádraží Hostivař",,0,,
-L22,WD,T22c,"Nádraží Hostivař",,0,,
-L22,WE,T22n,"Nádraží Hostivař",,0,,
-L991,WD,TA1,"Depo Hostivař",,0,,
-L22,WD,T22m,"Nádraží Hostivař",,0,,
+route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,sub_agency_id
+L22,WD,T22b,"Nádraží Hostivař",,0,,,1
+L22,WD,T22c,"Nádraží Hostivař",,0,,,2
+L22,WE,T22n,"Nádraží Hostivař",,0,,,1
+L991,WD,TA1,"Depo Hostivař",,0,,,1
+L22,WD,T22m,"Nádraží Hostivař",,0,,,1

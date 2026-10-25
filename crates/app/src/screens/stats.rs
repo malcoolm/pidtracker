@@ -119,9 +119,28 @@ fn PersonCard(stats: PersonStats) -> impl IntoView {
                     {stats.top_routes.iter().map(|(r, n)| view! { <li><strong>{r.clone()}</strong> {format!(" × {n}")}</li> }).collect_view()}
                 </ol>
             </Show>
+            <CountList title="Dopravci" items=stats.by_operator.clone() />
+            <CountList title="Nejčastější vozy" items=stats.by_vehicle.clone() />
             <SeriesChart series=stats.series.clone() />
         </article>
     }
+}
+
+/// Seznam „název × počet“ (dopravci, vozy); prázdný seznam se nezobrazí.
+#[component]
+fn CountList(title: &'static str, items: Vec<(String, u32)>) -> impl IntoView {
+    if items.is_empty() {
+        return ().into_any();
+    }
+    view! {
+        <h4>{title}</h4>
+        <ul class="counts">
+            {items.into_iter().map(|(name, n)| view! {
+                <li><span class="count-name">{name}</span><span class="count-value">{n}</span></li>
+            }).collect_view()}
+        </ul>
+    }
+    .into_any()
 }
 
 /// Jednoduchý sloupcový graf v SVG.

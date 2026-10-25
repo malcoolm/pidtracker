@@ -68,12 +68,13 @@ fn probe(t: pid_core::timetable::Timetable, name: &str) {
         for d in ix.departures(g.group, now, 0, 15).iter().take(15) {
             let rest = ix.downstream_stops(d.trip, d.stop, None, None);
             println!(
-                "  {} {:>4} → {:<28} stanoviště {:<3} ({} zastávek dál)",
+                "  {} {:>4} → {:<28} stanoviště {:<3} ({} zastávek dál) {}",
                 d.time.format("%H:%M"),
                 d.route_short_name,
                 d.headsign,
                 ix.platform(d.stop).unwrap_or("-"),
-                rest.len()
+                rest.len(),
+                d.operator
             );
         }
     }

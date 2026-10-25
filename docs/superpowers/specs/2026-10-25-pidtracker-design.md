@@ -218,3 +218,12 @@ Názvy zastávek a linek se ukládají denormalizovaně, aby tabulka byla čitel
 - Číslo jde vždy ručně přepsat (obrazovka jízdy, úprava jízdy); ruční hodnota má přednost.
 - Tramvaje, autobusy a trolejbusy mají ve feedu evidenční čísla. Metro má jen pořadí soupravy
   a vlaky číslo vlaku – u nich se nic nedoplňuje, jen ruční zadání.
+
+## 7.10 Pevná tabulka a dopravce (doplněno 2026-10-25)
+
+- Tabulka s jízdami je pevně nastavená v buildu (`config::SHEET_ID`); onboarding je jen přihlášení Googlem
+  s ověřením přístupu. Volba „Změnit tabulku“ byla odstraněna.
+- Dopravce spoje se bere ze statického GTFS (`trips.sub_agency_id` + `route_sub_agencies.txt`; realtime feed
+  dopravce neobsahuje). Ukládá se do jízdy při Startu (sloupec `operator` za `vehicle`), lze ho ručně upravit.
+- Statistiky navíc ukazují počty jízd podle dopravce a 10 nejčastějších vozů.
+- Formát jízdního řádu PIDT2 (spoj nese dopravce).

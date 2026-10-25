@@ -8,3 +8,6 @@ pub const GOOGLE_CLIENT_ID: Option<&str> = match option_env!("PIDTRACKER_GOOGLE_
     Some(id) if !id.is_empty() => Some(id),
     _ => None,
 };
+
+/// Pevně nastavená Google tabulka s jízdami (sdílená mezi uživateli).
+pub const SHEET_ID: &str = "13_ofodGGIDmTKrkgJjoTp5OVAdcJkMLr2Lt411UNhxg";

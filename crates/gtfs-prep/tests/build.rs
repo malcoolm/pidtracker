@@ -89,3 +89,14 @@ fn write_output_manifest() {
     assert_eq!(manifest["version"], "20261025-202610251200");
     assert_eq!(manifest["feed_end"], "2026-11-07");
 }
+
+#[test]
+fn trip_operator_from_sub_agency() {
+    let t = build();
+    let op = |id: &str| {
+        let trip = t.trips.iter().find(|x| x.gtfs_id == id).unwrap();
+        trip.operator.map(|o| t.string(o).to_string())
+    };
+    assert_eq!(op("T22b").as_deref(), Some("Dopravní podnik hl. m. Prahy, akciová společnost"));
+    assert_eq!(op("T22c").as_deref(), Some("Testovací dopravce s.r.o."));
+}

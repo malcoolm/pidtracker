@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn update_range_format() {
-        assert_eq!(update_range(5), "rides!A5:Y5");
+        assert_eq!(update_range(5), "rides!A5:Z5");
     }
 
 }

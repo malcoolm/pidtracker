@@ -10,6 +10,7 @@ use crate::time::TZ;
 /// Do celkového času se nepočítají jízdy delší než 6 h (zapomenutý Výstup).
 pub const MAX_COUNTED_MINUTES: i64 = 360;
 const TOP_ROUTES: usize = 5;
+pub const TOP_VEHICLES: usize = 10;
 const MONTHS_CS: [&str; 12] = [
     "leden", "únor", "březen", "duben", "květen", "červen", "červenec", "srpen", "září", "říjen", "listopad",
     "prosinec",
@@ -123,6 +124,10 @@ pub struct PersonStats {
     pub by_kind: Vec<(RouteKind, u32)>,
     /// Max. 5, sestupně podle počtu, při shodě abecedně.
     pub top_routes: Vec<(String, u32)>,
+    /// Počty jízd podle dopravce, sestupně (bez neznámého dopravce).
+    pub by_operator: Vec<(String, u32)>,
+    /// Nejčastější vozy (max. 10), sestupně (bez neznámého vozu).
+    pub by_vehicle: Vec<(String, u32)>,
     /// Týden → dny Po..Ne, měsíc → dny 1..N, rok → měsíce 1..12, celkem → roky.
     pub series: Vec<(String, u32)>,
 }
@@ -187,18 +192,30 @@ pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
                 .sum();
             let mut kinds = HashMap::new();
             let mut routes = HashMap::new();
+            let mut operators = HashMap::new();
+            let mut vehicles = HashMap::new();
             for r in &rides {
                 *kinds.entry(r.kind()).or_insert(0) += 1;
                 *routes.entry(r.route_short_name.clone()).or_insert(0) += 1;
+                if !r.operator.trim().is_empty() {
+                    *operators.entry(r.operator.trim().to_string()).or_insert(0) += 1;
+                }
+                if !r.vehicle.trim().is_empty() {
+                    *vehicles.entry(r.vehicle.trim().to_string()).or_insert(0) += 1;
+                }
             }
             let mut top_routes = sorted_counts(routes);
             top_routes.truncate(TOP_ROUTES);
+            let mut by_vehicle = sorted_counts(vehicles);
+            by_vehicle.truncate(TOP_VEHICLES);
             let dates: Vec<NaiveDate> = rides.iter().map(|r| local_date(r)).collect();
             PersonStats {
                 person,
                 rides: rides.len() as u32,
                 minutes,
                 by_kind: sorted_counts(kinds),
+                by_operator: sorted_counts(operators),
+                by_vehicle,
                 top_routes,
                 series: series(q.period, &dates),
             }
@@ -329,5 +346,46 @@ mod tests {
         assert_eq!(Period::Week { iso_year: 2026, week: 43 }.label_cs(), "týden 43/2026 (19. 10. – 25. 10.)");
         assert_eq!(Period::Year(2026).label_cs(), "2026");
         assert_eq!(Period::All.label_cs(), "Celkem");
+    }
+}
+
+#[cfg(test)]
+mod operator_vehicle_tests {
+    use super::*;
+    use crate::ride::tests::sample_ride;
+    use chrono::{DateTime, Duration};
+
+    fn mk(id: &str, operator: &str, vehicle: &str, start: &str) -> Ride {
+        let mut r = sample_ride();
+        r.id = id.into();
+        r.operator = operator.into();
+        r.vehicle = vehicle.into();
+        r.board_time = DateTime::parse_from_rfc3339(start).unwrap();
+        r.alight_time = Some(r.board_time + Duration::minutes(10));
+        r
+    }
+
+    #[test]
+    fn aggregates_by_operator_and_vehicle() {
+        let rides = vec![
+            mk("1", "DPP", "8758", "2026-10-05T08:00:00+02:00"),
+            mk("2", "DPP", "8758", "2026-10-06T08:00:00+02:00"),
+            mk("3", "DPP", "9355", "2026-10-07T08:00:00+02:00"),
+            mk("4", "ARRIVA CITY a.s.", "", "2026-10-08T08:00:00+02:00"),
+            mk("5", "", "1234", "2026-10-09T08:00:00+02:00"),
+        ];
+        let s = compute(&rides, &StatsQuery { period: Period::Month { year: 2026, month: 10 }, persons: vec![] });
+        let p = &s[0];
+        assert_eq!(p.by_operator, vec![("DPP".into(), 3), ("ARRIVA CITY a.s.".into(), 1)]);
+        assert_eq!(p.by_vehicle, vec![("8758".into(), 2), ("1234".into(), 1), ("9355".into(), 1)]);
+    }
+
+    #[test]
+    fn vehicle_list_is_capped() {
+        let rides: Vec<Ride> = (0..15)
+            .map(|i| mk(&i.to_string(), "DPP", &format!("{}", 1000 + i), "2026-10-05T08:00:00+02:00"))
+            .collect();
+        let s = compute(&rides, &StatsQuery { period: Period::All, persons: vec![] });
+        assert_eq!(s[0].by_vehicle.len(), TOP_VEHICLES);
     }
 }

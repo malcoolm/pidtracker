@@ -9,7 +9,6 @@ use crate::google::auth::{current_token, sign_in, sign_out};
 use crate::state::{AppState, TtState};
 use crate::sync::{request_sync, save_nickname};
 use crate::update::{UpdateCheck, apply_if_safe, check_now};
-use crate::util::{keys, ls_remove};
 
 #[component]
 pub fn Settings() -> impl IntoView {
@@ -43,10 +42,6 @@ pub fn Settings() -> impl IntoView {
     let do_sign_out = move |_| {
         sign_out();
         state.me.set(None);
-    };
-    let change_sheet = move |_| {
-        ls_remove(keys::SHEET_ID);
-        state.sheet_id.set(None);
     };
     let check_updates = move |_| {
         update_msg.set(Some("Kontroluji…".into()));
@@ -85,7 +80,6 @@ pub fn Settings() -> impl IntoView {
             <h3>"Tabulka"</h3>
             <div class="row">
                 {move || sheet_url().map(|u| view! { <a href=u target="_blank" rel="noopener">"Otevřít v Google Sheets"</a> })}
-                <button class="link" on:click=change_sheet>"Změnit tabulku"</button>
             </div>
 
             <h3>"O aplikaci"</h3>

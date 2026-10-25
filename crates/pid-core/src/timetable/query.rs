@@ -36,6 +36,8 @@ pub struct Departure {
     pub headsign: String,
     pub time: DateTime<Tz>,
     pub trip_gtfs_id: String,
+    /// Dopravce spoje, prázdné = neznámý.
+    pub operator: String,
     pub pattern: u32,
 }
 
@@ -246,6 +248,7 @@ impl DepartureSource for TimetableIndex {
                                 headsign: self.tt.string(trip.headsign).to_string(),
                                 time: gtfs_instant(service_date, trip.start + offset as u32),
                                 trip_gtfs_id: trip.gtfs_id.clone(),
+                                operator: trip.operator.map(|o| self.tt.string(o).to_string()).unwrap_or_default(),
                                 pattern: p,
                             });
                         }

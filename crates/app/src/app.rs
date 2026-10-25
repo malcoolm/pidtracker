@@ -30,7 +30,7 @@ pub fn App() -> impl IntoView {
     });
     update::install(state);
 
-    let needs_setup = move || state.me.get().is_none() || state.sheet_id.get().is_none();
+    let needs_setup = move || state.me.get().is_none();
 
     view! {
         <Show when=move || !needs_setup() fallback=|| view! { <main class="app"><Onboarding /></main> }>

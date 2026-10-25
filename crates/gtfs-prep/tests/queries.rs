@@ -131,3 +131,11 @@ fn next_day_service_before_midnight() {
     assert!(ids.contains(&"T22m"), "{ids:?}");
     assert_eq!(d.iter().find(|x| x.trip_gtfs_id == "T22m").unwrap().time.format("%Y-%m-%d %H:%M").to_string(), "2026-10-26 00:05");
 }
+
+#[test]
+fn departure_carries_operator() {
+    let ix = index();
+    let d = ix.departures(group(&ix, "Náměstí Míru"), prague(2026, 10, 26, 7, 58), 5, 30);
+    assert_eq!(d[0].operator, "Dopravní podnik hl. m. Prahy, akciová společnost");
+    assert_eq!(d[1].operator, "Testovací dopravce s.r.o.");
+}
