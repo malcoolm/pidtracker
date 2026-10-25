@@ -39,6 +39,18 @@ pub const HEADERS: [&str; 24] = [
 ];
 pub const LAST_COL: &str = "X";
 
+/// Písmeno sloupce tabulky (1 → A, 27 → AA).
+pub fn column_letter(mut n: usize) -> String {
+    let mut out = Vec::new();
+    while n > 0 {
+        let rem = (n - 1) % 26;
+        out.push(b'A' + rem as u8);
+        n = (n - 1) / 26;
+    }
+    out.reverse();
+    String::from_utf8(out).unwrap()
+}
+
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum RowError {
     #[error("chybí povinný sloupec {0}")]
@@ -312,5 +324,19 @@ mod row_tests {
             people_rows(&v),
             vec![(2, "tata@gmail.com".into(), "Táta".into()), (3, "syn@gmail.com".into(), "".into())]
         );
+    }
+}
+
+#[cfg(test)]
+mod column_tests {
+    use super::*;
+
+    #[test]
+    fn column_letters() {
+        assert_eq!(column_letter(1), "A");
+        assert_eq!(column_letter(24), "X");
+        assert_eq!(column_letter(26), "Z");
+        assert_eq!(column_letter(27), "AA");
+        assert_eq!(column_letter(53), "BA");
     }
 }

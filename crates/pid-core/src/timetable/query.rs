@@ -123,6 +123,19 @@ impl TimetableIndex {
         self.tt.stops[stop as usize].group
     }
 
+    /// První stanoviště skupiny (pro ručně zadanou linku bez konkrétního spoje).
+    pub fn group_first_stop(&self, group: u32) -> u32 {
+        self.tt.groups[group as usize].stops[0]
+    }
+
+    pub fn trip_by_gtfs_id(&self, id: &str) -> Option<u32> {
+        self.tt.trips.iter().position(|t| t.gtfs_id == id).map(|i| i as u32)
+    }
+
+    pub fn stop_by_gtfs_id(&self, id: &str) -> Option<u32> {
+        self.tt.stops.iter().position(|s| s.gtfs_id == id).map(|i| i as u32)
+    }
+
     /// Označení stanoviště (např. „A“, „1“), pokud existuje.
     pub fn platform(&self, stop: u32) -> Option<&str> {
         self.tt.stops[stop as usize].platform.map(|p| self.tt.string(p))

@@ -99,3 +99,15 @@ fn timetable_status_expiry() {
     assert_eq!(ix.status(d(11, 6)), DataStatus::ExpiringSoon { days_left: 1 });
     assert_eq!(ix.status(d(11, 8)), DataStatus::Expired);
 }
+
+#[test]
+fn lookup_by_gtfs_ids() {
+    let ix = index();
+    let trip = ix.trip_by_gtfs_id("T22c").unwrap();
+    assert_eq!(ix.tt.trips[trip as usize].gtfs_id, "T22c");
+    let stop = ix.stop_by_gtfs_id("U1Z2P").unwrap();
+    assert_eq!(ix.tt.stops[stop as usize].gtfs_id, "U1Z2P");
+    assert_eq!(ix.tt.group_name(ix.group_of_stop(stop)), "Náměstí Míru");
+    assert!(ix.trip_by_gtfs_id("nope").is_none());
+    assert_eq!(ix.tt.stops[ix.group_first_stop(ix.group_of_stop(stop)) as usize].gtfs_id, "U1Z1P");
+}
