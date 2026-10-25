@@ -142,6 +142,15 @@ impl TimetableIndex {
     }
 }
 
+/// Z odjezdů seřazených podle času ponechá jen nejbližší pro každou dvojici linka + směr.
+pub fn next_per_direction(departures: Vec<Departure>) -> Vec<Departure> {
+    let mut seen = std::collections::HashSet::new();
+    departures
+        .into_iter()
+        .filter(|d| seen.insert((d.route_id.clone(), d.headsign.clone())))
+        .collect()
+}
+
 fn by_distance(a: &NearbyGroup, b: &NearbyGroup) -> Ordering {
     a.distance_m.partial_cmp(&b.distance_m).unwrap_or(Ordering::Equal)
 }

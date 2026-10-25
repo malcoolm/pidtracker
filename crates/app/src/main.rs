@@ -1,5 +1,15 @@
 mod app;
+mod components;
 mod config;
+mod google;
+mod interop;
+mod screens;
+mod state;
+mod storage;
+mod sync;
+mod timetable_loader;
+mod update;
+mod util;
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -9,6 +19,5 @@ fn main() {
 
 fn register_service_worker() {
     let Some(window) = web_sys::window() else { return };
-    let container = window.navigator().service_worker();
-    let _ = container.register("sw.js");
+    let _ = window.navigator().service_worker().register("sw.js");
 }

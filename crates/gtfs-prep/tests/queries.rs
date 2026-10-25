@@ -111,3 +111,13 @@ fn lookup_by_gtfs_ids() {
     assert!(ix.trip_by_gtfs_id("nope").is_none());
     assert_eq!(ix.tt.stops[ix.group_first_stop(ix.group_of_stop(stop)) as usize].gtfs_id, "U1Z1P");
 }
+
+#[test]
+fn next_per_direction_keeps_earliest() {
+    use pid_core::timetable::query::next_per_direction;
+    let ix = index();
+    let d = ix.departures(group(&ix, "Náměstí Míru"), prague(2026, 10, 26, 7, 58), 5, 30);
+    let n = next_per_direction(d);
+    assert_eq!(n.len(), 1);
+    assert_eq!(n[0].trip_gtfs_id, "T22b");
+}

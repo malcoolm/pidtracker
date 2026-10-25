@@ -85,7 +85,7 @@ impl Csv {
     }
 }
 
-fn field<'a>(rec: &'a csv::StringRecord, idx: usize) -> &'a str {
+fn field(rec: &csv::StringRecord, idx: usize) -> &str {
     rec.get(idx).unwrap_or("").trim()
 }
 

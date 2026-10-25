@@ -94,7 +94,7 @@ mod tests {
     }
 
     fn newer(mut r: Ride, minutes: i64) -> Ride {
-        r.updated_at = r.updated_at + Duration::minutes(minutes);
+        r.updated_at += Duration::minutes(minutes);
         r
     }
 
