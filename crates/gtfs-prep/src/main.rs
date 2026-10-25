@@ -20,6 +20,9 @@ struct Args {
     /// Pracovní složka pro stažení a rozbalení.
     #[arg(long, default_value = ".gtfs")]
     work_dir: PathBuf,
+    /// Po sestavení vypíše odjezdy z dané zastávky v aktuálním čase (kontrola dat).
+    #[arg(long)]
+    probe: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -50,5 +53,28 @@ fn main() -> Result<()> {
         info.bytes as f64 / 1024.0 / 1024.0,
         started.elapsed().as_secs_f64()
     );
+    if let Some(name) = args.probe {
+        probe(t, &name);
+    }
     Ok(())
+}
+
+fn probe(t: pid_core::timetable::Timetable, name: &str) {
+    use pid_core::timetable::query::{DepartureSource, TimetableIndex};
+    let ix = TimetableIndex::new(t);
+    let now = chrono::Utc::now().with_timezone(&pid_core::time::TZ);
+    for g in ix.search_groups(name, 3) {
+        println!("== {} (skupina {})", g.name, g.group);
+        for d in ix.departures(g.group, now, 0, 15).iter().take(15) {
+            let rest = ix.downstream_stops(d.trip, d.stop, None, None);
+            println!(
+                "  {} {:>4} → {:<28} stanoviště {:<3} ({} zastávek dál)",
+                d.time.format("%H:%M"),
+                d.route_short_name,
+                d.headsign,
+                ix.platform(d.stop).unwrap_or("-"),
+                rest.len()
+            );
+        }
+    }
 }
