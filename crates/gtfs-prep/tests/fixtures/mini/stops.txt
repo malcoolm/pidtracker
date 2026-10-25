@@ -1,0 +1,8 @@
+stop_id,stop_name,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,wheelchair_boarding,level_id,platform_code,asw_node_id,asw_stop_id,zone_region_type
+U1Z1P,"Náměstí Míru",50.075500,14.437500,"P",,0,,0,,A,1,1,1
+U1Z2P,"Náměstí Míru",50.075600,14.437900,"P",,0,,0,,B,1,2,1
+U1Z101P,"Náměstí Míru",50.075300,14.437200,"P",,0,U1S1,0,,1,1,101,1
+U2Z1P,"Jana Masaryka",50.073500,14.440000,"P",,0,,0,,A,2,1,1
+U3Z1P,"Ruská",50.070000,14.450000,"P",,0,,0,,A,3,1,1
+U4Z101P,"Muzeum",50.079000,14.430000,"P",,0,,0,,1,4,101,1
+U1S1,"Náměstí Míru",50.075300,14.437200,"P",,1,,0,,,1,,1
