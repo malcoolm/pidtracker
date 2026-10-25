@@ -1,0 +1,12 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+clap = { version = "4", features = ["derive"] }
+gtfs-prep = { path = "../crates/gtfs-prep" }

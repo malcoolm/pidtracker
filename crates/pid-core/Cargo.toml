@@ -1,0 +1,12 @@
+[package]
+name = "pid-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+postcard.workspace = true
+flate2.workspace = true
+thiserror.workspace = true
