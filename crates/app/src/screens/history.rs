@@ -9,8 +9,8 @@ use crate::state::AppState;
 #[component]
 pub fn History() -> impl IntoView {
     let state = expect_context::<AppState>();
-    // None = všichni
-    let filter = RwSignal::new(None::<String>);
+    // None = všichni; výchozí jsou jízdy přihlášeného uživatele.
+    let filter = RwSignal::new(state.me.get_untracked().map(|me| me.to_lowercase()));
     let persons = move || {
         let mut p: Vec<String> = state.rides.with(|rs| rs.iter().map(|r| r.person.to_lowercase()).collect());
         if let Some(me) = state.me.get() {
@@ -47,7 +47,6 @@ pub fn History() -> impl IntoView {
         <section class="history">
             <h2>"Historie"</h2>
             <div class="segmented">
-                <button class:selected=move || filter.get().is_none() on:click=move |_| filter.set(None)>"Vše"</button>
                 <For each=persons key=|p| p.clone() let:p>
                     {
                         let label = if state.me.get_untracked().is_some_and(|me| me.eq_ignore_ascii_case(&p)) {
@@ -62,6 +61,7 @@ pub fn History() -> impl IntoView {
                         }
                     }
                 </For>
+                <button class:selected=move || filter.get().is_none() on:click=move |_| filter.set(None)>"Vše"</button>
             </div>
             <Show when=move || groups().is_empty()>
                 <p class="muted">"Zatím žádné jízdy."</p>

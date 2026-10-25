@@ -25,7 +25,9 @@ pub fn Home() -> impl IntoView {
 fn Idle() -> impl IntoView {
     let state = expect_context::<AppState>();
     let recent = move || {
-        let mut rides: Vec<Ride> = state.rides.get().into_iter().filter(|r| !r.deleted).collect();
+        // Jen jízdy přihlášeného uživatele; jízdy ostatních jsou v Historii.
+        let me = state.me.get().unwrap_or_default();
+        let mut rides: Vec<Ride> = state.rides.get().into_iter().filter(|r| !r.deleted && r.can_edit(&me)).collect();
         rides.sort_by_key(|r| std::cmp::Reverse(r.board_time));
         rides.truncate(3);
         rides
