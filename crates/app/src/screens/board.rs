@@ -240,6 +240,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             data_version: ix.as_ref().map(|ix| ix.version().to_string()).unwrap_or_default(),
             vehicle: String::new(),
             operator: String::new(),
+            license_plate: String::new(),
         };
         if let (Some(ix), Some(g)) = (&ix, group) {
             ride.board_stop_name = ix.tt.group_name(g).to_string();

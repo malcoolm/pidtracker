@@ -11,7 +11,7 @@ pub const PEOPLE_SHEET: &str = "people";
 pub const PEOPLE_HEADERS: [&str; 2] = ["email", "nickname"];
 
 /// Sloupce listu `rides`. Nové sloupce se smí přidávat jen na konec.
-pub const HEADERS: [&str; 26] = [
+pub const HEADERS: [&str; 27] = [
     "id",
     "person",
     "board_stop_id",
@@ -38,8 +38,9 @@ pub const HEADERS: [&str; 26] = [
     "data_version",
     "vehicle",
     "operator",
+    "license_plate",
 ];
-pub const LAST_COL: &str = "Z";
+pub const LAST_COL: &str = "AA";
 
 /// Písmeno sloupce tabulky (1 → A, 27 → AA).
 pub fn column_letter(mut n: usize) -> String {
@@ -117,6 +118,7 @@ pub fn to_row(r: &Ride) -> Vec<String> {
         r.data_version.clone(),
         r.vehicle.clone(),
         r.operator.clone(),
+        r.license_plate.clone(),
     ]
 }
 
@@ -196,6 +198,7 @@ pub fn from_row(headers: &[String], row: &[String]) -> Result<Ride, RowError> {
         data_version: c.get("data_version").to_string(),
         vehicle: c.get("vehicle").to_string(),
         operator: c.get("operator").to_string(),
+        license_plate: c.get("license_plate").to_string(),
     })
 }
 
@@ -286,8 +289,8 @@ mod row_tests {
 
     #[test]
     fn headers_len_matches_last_col() {
-        assert_eq!(HEADERS.len(), 26);
-        assert_eq!(LAST_COL, "Z");
+        assert_eq!(HEADERS.len(), 27);
+        assert_eq!(LAST_COL, "AA");
         assert_eq!(HEADERS[25], "operator");
         assert_eq!(HEADERS[24], "vehicle");
     }
@@ -425,5 +428,37 @@ mod vehicle_tests {
     #[test]
     fn vehicle_is_last_column() {
         assert_eq!(to_row(&sample_ride())[24], "8758");
+    }
+}
+
+#[cfg(test)]
+mod plate_tests {
+    use super::*;
+    use crate::ride::tests::sample_ride;
+
+    #[test]
+    fn plate_is_column_aa() {
+        assert_eq!(HEADERS[26], "license_plate");
+        assert_eq!(LAST_COL, "AA");
+        assert_eq!(column_letter(HEADERS.len()), LAST_COL);
+    }
+
+    #[test]
+    fn plate_round_trips() {
+        let mut r = sample_ride();
+        r.license_plate = "1AB 2345".into();
+        let headers: Vec<String> = HEADERS.iter().map(|s| s.to_string()).collect();
+        let p = parse_rows(&[headers, to_row(&r)]);
+        assert_eq!(p.rides[0].1.license_plate, "1AB 2345");
+    }
+
+    #[test]
+    fn old_sheet_without_plate_column_parses() {
+        let headers: Vec<String> = HEADERS[..26].iter().map(|s| s.to_string()).collect();
+        let mut row = to_row(&sample_ride());
+        row.truncate(26);
+        let p = parse_rows(&[headers, row]);
+        assert_eq!(p.rides[0].1.license_plate, "");
+        assert_eq!(p.rides[0].1.vehicle, "8758");
     }
 }

@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone};
 use leptos::prelude::*;
-use pid_core::ride::{Ride, RideStatus, RouteKind};
+use pid_core::ride::{Ride, RideStatus, RouteKind, apply_known_plate};
 use pid_core::time::TZ;
 use pid_core::timetable::query::DepartureSource;
 
@@ -37,6 +37,7 @@ pub fn Edit(id: String) -> impl IntoView {
     let alight_stop = RwSignal::new(ride.alight_stop_name.clone().unwrap_or_default());
     let line = RwSignal::new(ride.route_short_name.clone());
     let vehicle = RwSignal::new(ride.vehicle.clone());
+    let plate = RwSignal::new(ride.license_plate.clone());
     let operator = RwSignal::new(ride.operator.clone());
     let kind = RwSignal::new(ride.route_type);
     let board_time = RwSignal::new(to_input(&ride.board_time));
@@ -130,6 +131,8 @@ pub fn Edit(id: String) -> impl IntoView {
         }
         r.board_time = bt;
         r.vehicle = vehicle.get_untracked().trim().to_string();
+        r.license_plate = plate.get_untracked().trim().to_string();
+        state.rides.with_untracked(|all| apply_known_plate(&mut r, all));
         r.operator = operator.get_untracked().trim().to_string();
         r.alight_time = at;
         if at.is_some() {
@@ -189,6 +192,10 @@ pub fn Edit(id: String) -> impl IntoView {
                 <input type="text" inputmode="numeric" prop:value=move || vehicle.get()
                     on:input=move |ev| vehicle.set(event_target_value(&ev)) />
             </label>
+            <label>"SPZ"
+                <input type="text" autocapitalize="characters" placeholder="např. 1AB 2345" prop:value=move || plate.get()
+                    on:input=move |ev| plate.set(event_target_value(&ev)) />
+            </label>
             <label>"Dopravce"
                 <input type="text" prop:value=move || operator.get()
                     on:input=move |ev| operator.set(event_target_value(&ev)) />
@@ -235,6 +242,7 @@ fn ReadOnly(ride: Ride) -> impl IntoView {
                 {ride.alight_time.as_ref().map(|t| format!(", {}", fmt(t)))}</p>
             {ride.duration_minutes().filter(|m| *m >= 0).map(|m| view! { <p>"Doba: " {duration_label(m)}</p> })}
             {(!ride.vehicle.is_empty()).then(|| view! { <p>"Vůz: " {ride.vehicle.clone()}</p> })}
+            {(!ride.license_plate.is_empty()).then(|| view! { <p>"SPZ: " {ride.license_plate.clone()}</p> })}
             {(!ride.operator.is_empty()).then(|| view! { <p>"Dopravce: " {ride.operator.clone()}</p> })}
             <p class="muted">"Jízdy jiných osob nelze upravovat."</p>
             <button class="link" on:click=move |_| state.screen.set(Screen::History)>"Zpět"</button>

@@ -120,7 +120,17 @@ fn PersonCard(stats: PersonStats) -> impl IntoView {
                 </ol>
             </Show>
             <CountList title="Dopravci" items=stats.by_operator.clone() />
-            <CountList title="Nejčastější vozy" items=stats.by_vehicle.clone() />
+            <CountList
+                title="Nejčastější vozy"
+                items=stats
+                    .by_vehicle
+                    .iter()
+                    .map(|v| match &v.plate {
+                        Some(p) => (format!("{} · {p}", v.vehicle), v.rides),
+                        None => (v.vehicle.clone(), v.rides),
+                    })
+                    .collect()
+            />
             <SeriesChart series=stats.series.clone() />
         </article>
     }

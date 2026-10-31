@@ -127,9 +127,17 @@ pub struct PersonStats {
     /// Počty jízd podle dopravce, sestupně (bez neznámého dopravce).
     pub by_operator: Vec<(String, u32)>,
     /// Nejčastější vozy (max. 10), sestupně (bez neznámého vozu).
-    pub by_vehicle: Vec<(String, u32)>,
+    pub by_vehicle: Vec<VehicleCount>,
     /// Týden → dny Po..Ne, měsíc → dny 1..N, rok → měsíce 1..12, celkem → roky.
     pub series: Vec<(String, u32)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VehicleCount {
+    pub vehicle: String,
+    pub rides: u32,
+    /// Nejnovější známá SPZ vozu v období.
+    pub plate: Option<String>,
 }
 
 fn local_date(r: &Ride) -> NaiveDate {
@@ -208,6 +216,11 @@ pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
             top_routes.truncate(TOP_ROUTES);
             let mut by_vehicle = sorted_counts(vehicles);
             by_vehicle.truncate(TOP_VEHICLES);
+            let owned: Vec<Ride> = rides.iter().map(|r| (*r).clone()).collect();
+            let by_vehicle = by_vehicle
+                .into_iter()
+                .map(|(vehicle, n)| VehicleCount { plate: crate::ride::known_plate(&owned, &vehicle), vehicle, rides: n })
+                .collect();
             let dates: Vec<NaiveDate> = rides.iter().map(|r| local_date(r)).collect();
             PersonStats {
                 person,
@@ -369,7 +382,11 @@ mod operator_vehicle_tests {
     fn aggregates_by_operator_and_vehicle() {
         let rides = vec![
             mk("1", "DPP", "8758", "2026-10-05T08:00:00+02:00"),
-            mk("2", "DPP", "8758", "2026-10-06T08:00:00+02:00"),
+            {
+                let mut r = mk("2", "DPP", "8758", "2026-10-06T08:00:00+02:00");
+                r.license_plate = "1AB 2345".into();
+                r
+            },
             mk("3", "DPP", "9355", "2026-10-07T08:00:00+02:00"),
             mk("4", "ARRIVA CITY a.s.", "", "2026-10-08T08:00:00+02:00"),
             mk("5", "", "1234", "2026-10-09T08:00:00+02:00"),
@@ -377,7 +394,12 @@ mod operator_vehicle_tests {
         let s = compute(&rides, &StatsQuery { period: Period::Month { year: 2026, month: 10 }, persons: vec![] });
         let p = &s[0];
         assert_eq!(p.by_operator, vec![("DPP".into(), 3), ("ARRIVA CITY a.s.".into(), 1)]);
-        assert_eq!(p.by_vehicle, vec![("8758".into(), 2), ("1234".into(), 1), ("9355".into(), 1)]);
+        let v = |vehicle: &str, rides: u32, plate: Option<&str>| VehicleCount {
+            vehicle: vehicle.into(),
+            rides,
+            plate: plate.map(Into::into),
+        };
+        assert_eq!(p.by_vehicle, vec![v("8758", 2, Some("1AB 2345")), v("1234", 1, None), v("9355", 1, None)]);
     }
 
     #[test]

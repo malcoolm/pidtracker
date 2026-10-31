@@ -3,7 +3,7 @@
 use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use pid_core::ride::Ride;
+use pid_core::ride::{Ride, apply_known_plate};
 
 use crate::components::{DataBanner, RideRow, RouteBadge, ride_color};
 use crate::state::{AppState, Screen};
@@ -110,6 +110,24 @@ fn Running(ride: Ride) -> impl IntoView {
                         move |ev| {
                             if let Some(mut r) = state.ride(&id) {
                                 r.vehicle = event_target_value(&ev).trim().to_string();
+                                state.rides.with_untracked(|all| apply_known_plate(&mut r, all));
+                                r.updated_at = now_fixed();
+                                state.save_ride(r);
+                            }
+                        }
+                    } />
+            </label>
+            <label class="vehicle">"SPZ"
+                <input type="text" autocapitalize="characters" placeholder="např. 1AB 2345"
+                    prop:value={
+                        let id = ride.id.clone();
+                        move || state.ride(&id).map(|r| r.license_plate).unwrap_or_default()
+                    }
+                    on:change={
+                        let id = ride.id.clone();
+                        move |ev| {
+                            if let Some(mut r) = state.ride(&id) {
+                                r.license_plate = event_target_value(&ev).trim().to_string();
                                 r.updated_at = now_fixed();
                                 state.save_ride(r);
                             }

@@ -136,7 +136,10 @@ pub fn RideRow(ride: Ride) -> impl IntoView {
     };
     let duration = ride.duration_minutes().filter(|m| *m >= 0).map(duration_label);
     let unfinished = ride.status == RideStatus::InProgress;
-    let vehicle = (!ride.vehicle.is_empty()).then(|| ride.vehicle.clone());
+    let vehicle = (!ride.vehicle.is_empty()).then(|| match ride.license_plate.trim() {
+        "" => ride.vehicle.clone(),
+        plate => format!("{} · {plate}", ride.vehicle),
+    });
     view! {
         <button class="ride-row" on:click=move |_| state.screen.set(Screen::Edit(id.clone()))>
             <RouteBadge name=ride.route_short_name.clone() color=color />

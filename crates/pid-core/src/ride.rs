@@ -122,6 +122,9 @@ pub struct Ride {
     /// Dopravce spoje (z jízdního řádu); prázdné = neznámý.
     #[serde(default)]
     pub operator: String,
+    /// SPZ vozu (jen ručně); prázdné = neznámá.
+    #[serde(default)]
+    pub license_plate: String,
 }
 
 impl Ride {
@@ -135,6 +138,33 @@ impl Ride {
 
     pub fn kind(&self) -> RouteKind {
         self.route_type.map(RouteKind::from_gtfs).unwrap_or(RouteKind::Other)
+    }
+}
+
+/// SPZ vozu z nejnovější nesmazané jízdy se stejným číslem vozu, která ji má vyplněnou.
+pub fn known_plate(rides: &[Ride], vehicle: &str) -> Option<String> {
+    let vehicle = vehicle.trim();
+    if vehicle.is_empty() {
+        return None;
+    }
+    rides
+        .iter()
+        .filter(|r| !r.deleted && r.vehicle.trim() == vehicle && !r.license_plate.trim().is_empty())
+        .max_by_key(|r| r.board_time)
+        .map(|r| r.license_plate.trim().to_string())
+}
+
+/// Doplní prázdnou SPZ podle dřívějších jízd stejného vozu. Vrací, zda se něco změnilo.
+pub fn apply_known_plate(ride: &mut Ride, all: &[Ride]) -> bool {
+    if !ride.license_plate.trim().is_empty() {
+        return false;
+    }
+    match known_plate(all, &ride.vehicle) {
+        Some(p) => {
+            ride.license_plate = p;
+            true
+        }
+        None => false,
     }
 }
 
@@ -172,6 +202,7 @@ pub(crate) mod tests {
             data_version: "20261025-202610251200".into(),
             vehicle: "8758".into(),
             operator: "Dopravní podnik hl. m. Prahy, akciová společnost".into(),
+            license_plate: String::new(),
         }
     }
 
@@ -197,5 +228,52 @@ pub(crate) mod tests {
         assert_eq!(RouteKind::from_gtfs(11), RouteKind::Trolleybus);
         assert_eq!(RouteKind::from_gtfs(99), RouteKind::Other);
         assert_eq!(RouteKind::Train.label_cs(), "Vlak");
+    }
+}
+
+#[cfg(test)]
+mod plate_tests {
+    use super::tests::sample_ride;
+    use super::*;
+    use chrono::DateTime;
+
+    fn ride(id: &str, vehicle: &str, plate: &str, start: &str) -> Ride {
+        let mut r = sample_ride();
+        r.id = id.into();
+        r.vehicle = vehicle.into();
+        r.license_plate = plate.into();
+        r.board_time = DateTime::parse_from_rfc3339(start).unwrap();
+        r
+    }
+
+    #[test]
+    fn known_plate_takes_newest_for_vehicle() {
+        let rides = vec![
+            ride("1", "8758", "1AB 1111", "2026-10-01T08:00:00+02:00"),
+            ride("2", "8758", "1AB 2345", "2026-10-05T08:00:00+02:00"),
+            ride("3", "8758", "", "2026-10-06T08:00:00+02:00"),
+            ride("4", "9355", "2CD 0000", "2026-10-07T08:00:00+02:00"),
+        ];
+        assert_eq!(known_plate(&rides, " 8758 ").as_deref(), Some("1AB 2345"));
+        assert_eq!(known_plate(&rides, "1234"), None);
+        assert_eq!(known_plate(&rides, ""), None);
+    }
+
+    #[test]
+    fn known_plate_ignores_deleted() {
+        let mut deleted = ride("1", "8758", "1AB 2345", "2026-10-05T08:00:00+02:00");
+        deleted.deleted = true;
+        assert_eq!(known_plate(&[deleted], "8758"), None);
+    }
+
+    #[test]
+    fn apply_known_plate_keeps_manual_value() {
+        let all = vec![ride("1", "8758", "1AB 2345", "2026-10-05T08:00:00+02:00")];
+        let mut r = ride("2", "8758", "", "2026-10-06T08:00:00+02:00");
+        assert!(apply_known_plate(&mut r, &all));
+        assert_eq!(r.license_plate, "1AB 2345");
+        let mut manual = ride("3", "8758", "9XY 9999", "2026-10-06T08:00:00+02:00");
+        assert!(!apply_known_plate(&mut manual, &all));
+        assert_eq!(manual.license_plate, "9XY 9999");
     }
 }

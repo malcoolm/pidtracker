@@ -1,6 +1,8 @@
 //! Realtime feed PID: číslo vozu a zpoždění (best effort, nikdy neblokuje záznam jízdy).
 
 use gloo_net::http::Request;
+use leptos::prelude::WithUntracked;
+use pid_core::ride::apply_known_plate;
 use pid_core::realtime::{Delays, TRIP_UPDATES_URL, VEHICLE_POSITIONS_URL, parse_trip_delays, vehicle_for_trip};
 
 use crate::state::AppState;
@@ -23,6 +25,7 @@ pub async fn fill_vehicle(state: AppState, ride_id: String) {
     let Some(mut current) = state.ride(&ride_id) else { return };
     if current.vehicle.is_empty() {
         current.vehicle = vehicle;
+        state.rides.with_untracked(|all| apply_known_plate(&mut current, all));
         current.updated_at = now_fixed();
         state.save_ride(current);
     }
