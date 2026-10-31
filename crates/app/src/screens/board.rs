@@ -10,7 +10,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::realtime::Delays;
 use pid_core::ride::{Ride, RideStatus, RouteKind};
-use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows};
+use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows, pick_row};
 
 use crate::components::{DataBanner, RouteBadge};
 use crate::config::BUILD_ID;
@@ -27,14 +27,17 @@ const AFTER_MIN: i64 = 30;
 const TICK_MS: u32 = 30_000;
 const DELAYS_REFRESH_MS: u32 = 60_000;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 enum LineChoice {
     /// Nejbližší nadcházející spoj (výchozí).
     Auto,
-    /// Ručně vybraný spoj; drží se, dokud je v seznamu.
-    Trip { trip: u32, stop: u32 },
+    /// Ručně vybraný spoj; drží se, i když ze seznamu zmizí.
+    Trip(BoardRow),
     Manual,
 }
+
+/// Okolí přestupní zastávky (stejný uzel může mít víc jmen, např. Můstek / Václavské náměstí).
+const TRANSFER_RADIUS_M: f64 = 150.0;
 
 fn row_key(r: &BoardRow) -> (u32, u32) {
     (r.dep.trip, r.dep.stop)
@@ -53,6 +56,7 @@ fn delay_label(delay_s: Option<i32>) -> Option<(String, &'static str)> {
 #[component]
 fn DepRow(row: BoardRow, at: DateTime<Tz>, choice: RwSignal<LineChoice>, selected: Signal<Option<(u32, u32)>>) -> impl IntoView {
     let key = row_key(&row);
+    let picked = row.clone();
     let mins = (row.expected - at).num_minutes();
     let when = if mins <= 0 { "teď".to_string() } else { format!("za {mins} min") };
     let delay = delay_label(row.delay_s);
@@ -61,7 +65,7 @@ fn DepRow(row: BoardRow, at: DateTime<Tz>, choice: RwSignal<LineChoice>, selecte
         <button
             class="dep-row"
             class:selected=move || selected.get() == Some(key)
-            on:click=move |_| choice.set(LineChoice::Trip { trip: key.0, stop: key.1 })
+            on:click=move |_| choice.set(LineChoice::Trip(picked.clone()))
         >
             <RouteBadge name=d.route_short_name.clone() color=d.color />
             <span class="dep-head">{d.headsign.clone()}</span>
@@ -143,8 +147,13 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
         let Some(ix) = state.tt.get().index() else { return Vec::new() };
         match (fix.get(), group) {
             (Some(f), _) => ix.nearby_groups(f.lat, f.lon, f.accuracy_m),
-            // Přestup: ukázat předvybranou zastávku, i když polohu nezjišťujeme.
-            (None, Some(g)) => vec![NearbyGroup { group: g, name: ix.tt.group_name(g).to_string(), distance_m: 0.0 }],
+            // Přestup: předvybraná zastávka a vedle ní okolí (bez zjišťování polohy).
+            (None, Some(g)) => {
+                let (lat, lon) = ix.group_coords(g);
+                let mut out = vec![NearbyGroup { group: g, name: ix.tt.group_name(g).to_string(), distance_m: 0.0 }];
+                out.extend(ix.nearby_groups(lat, lon, TRANSFER_RADIUS_M).into_iter().filter(|n| n.group != g));
+                out
+            }
             (None, None) => Vec::new(),
         }
     });
@@ -162,28 +171,34 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
         let t = at.get();
         delays.with(|d| board_rows(ix.departures(g, t, BEFORE_MIN, AFTER_MIN), d, t, RECENT_MIN))
     });
-    // Vybraný řádek: ručně zvolený spoj, dokud je v seznamu, jinak nejbližší nadcházející.
+    // Vybraný řádek: ručně zvolený spoj (i když už ze seznamu zmizel), jinak nejbližší nadcházející.
     let selected_row = Memo::new(move |_| {
         rows.with(|(up, recent)| match choice.get() {
             LineChoice::Manual => None,
-            LineChoice::Trip { trip, stop } => up
-                .iter()
-                .chain(recent)
-                .find(|r| row_key(r) == (trip, stop))
-                .or_else(|| up.first())
-                .cloned(),
-            LineChoice::Auto => up.first().cloned(),
+            LineChoice::Trip(r) => pick_row(up, recent, Some(&r)),
+            LineChoice::Auto => pick_row(up, recent, None),
         })
     });
     let selected_key = Signal::derive(move || selected_row.with(|r| r.as_ref().map(row_key)));
-    Effect::new(move |_| {
+    // Zvolený spoj, který už v seznamech není – ukáže se nahoře, ať je výběr vidět.
+    let vanished = Memo::new(move |_| {
+        let sel = selected_row.get()?;
+        rows.with(|(up, recent)| up.iter().chain(recent).all(|r| row_key(r) != row_key(&sel)).then_some(sel))
+    });
+    // Ručně jen při změně „žádné odjezdy“ ↔ „jsou odjezdy“, ne při každém obnovení tabule.
+    Effect::new(move |was_empty: Option<bool>| {
         let empty = rows.with(|(up, recent)| up.is_empty() && recent.is_empty());
-        let c = choice.get_untracked();
-        if empty {
-            choice.set(LineChoice::Manual);
-        } else if c == LineChoice::Manual && manual_line.get_untracked().is_empty() {
-            choice.set(LineChoice::Auto);
+        if was_empty != Some(empty) {
+            if empty {
+                choice.set(LineChoice::Manual);
+            } else if was_empty == Some(true)
+                && choice.get_untracked() == LineChoice::Manual
+                && manual_line.get_untracked().is_empty()
+            {
+                choice.set(LineChoice::Auto);
+            }
         }
+        empty
     });
 
     let has_tt = move || state.tt.get().index().is_some();
@@ -315,7 +330,12 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             <div class="list">
                 {move || {
                     let t = at.get();
-                    rows.get().0.into_iter().map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key /> }).collect_view()
+                    vanished
+                        .get()
+                        .into_iter()
+                        .chain(rows.get().0)
+                        .map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key /> })
+                        .collect_view()
                 }}
                 <Show when=move || rows.with(|(_, recent)| !recent.is_empty())>
                     <button class="link small" on:click=move |_| show_recent.update(|v| *v = !*v)>

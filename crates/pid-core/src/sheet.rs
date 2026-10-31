@@ -42,6 +42,12 @@ pub const HEADERS: [&str; 27] = [
 ];
 pub const LAST_COL: &str = "AA";
 
+/// Kolik sloupců přidat do mřížky listu, aby se vešlo `needed` sloupců
+/// (nový list Google má jen 26, zápis za mřížku API odmítne).
+pub fn columns_to_append(column_count: usize, needed: usize) -> usize {
+    needed.saturating_sub(column_count)
+}
+
 /// Písmeno sloupce tabulky (1 → A, 27 → AA).
 pub fn column_letter(mut n: usize) -> String {
     let mut out = Vec::new();
@@ -460,5 +466,18 @@ mod plate_tests {
         let p = parse_rows(&[headers, row]);
         assert_eq!(p.rides[0].1.license_plate, "");
         assert_eq!(p.rides[0].1.vehicle, "8758");
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::*;
+
+    #[test]
+    fn grid_needs_extra_column_for_plate() {
+        // Nový list Google má 26 sloupců (A–Z); license_plate je 27.
+        assert_eq!(columns_to_append(26, HEADERS.len()), 1);
+        assert_eq!(columns_to_append(27, HEADERS.len()), 0);
+        assert_eq!(columns_to_append(40, HEADERS.len()), 0);
     }
 }

@@ -1,7 +1,7 @@
 //! Tenký klient Google Sheets API v4.
 
 use gloo_net::http::{Request, Response};
-use pid_core::sheet::column_letter;
+use pid_core::sheet::{column_letter, columns_to_append};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -135,6 +135,26 @@ impl SheetsClient {
             .collect();
         if !missing.is_empty() {
             self.post_json(&self.url(":batchUpdate"), &json!({ "requests": missing })).await?;
+        }
+        // Nový list má 26 sloupců (A–Z); zápis hlavičky za mřížku by API odmítlo.
+        let grid = self.get_json(&self.url("?fields=sheets.properties(title,sheetId,gridProperties.columnCount)")).await?;
+        let widen: Vec<Value> = grid["sheets"]
+            .as_array()
+            .map(|a| a.as_slice())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|s| {
+                let p = &s["properties"];
+                let headers = sheets.iter().find(|(name, _)| p["title"].as_str() == Some(name))?.1;
+                let count = p["gridProperties"]["columnCount"].as_u64()? as usize;
+                let add = columns_to_append(count, headers.len());
+                (add > 0).then(|| {
+                    json!({ "appendDimension": { "sheetId": p["sheetId"], "dimension": "COLUMNS", "length": add } })
+                })
+            })
+            .collect();
+        if !widen.is_empty() {
+            self.post_json(&self.url(":batchUpdate"), &json!({ "requests": widen })).await?;
         }
         let mut updates = Vec::new();
         for (name, headers) in sheets {

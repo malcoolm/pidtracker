@@ -215,3 +215,38 @@ fn node_with_two_names_gives_two_groups() {
     assert_eq!(ix.search_groups("jugo", 5)[0].name, "Jugoslávská");
     assert_eq!(ix.search_groups("namesti miru", 5)[0].name, "Náměstí Míru");
 }
+
+fn row(ix: &TimetableIndex, gtfs: &str, now: DateTime<Tz>) -> (Vec<pid_core::timetable::query::BoardRow>, Vec<pid_core::timetable::query::BoardRow>, pid_core::timetable::query::BoardRow) {
+    use pid_core::realtime::Delays;
+    use pid_core::timetable::query::board_rows;
+    let d = ix.departures(group(ix, "Náměstí Míru"), now, 15, 30);
+    let (up, recent) = board_rows(d, &Delays::default(), now, 5);
+    let r = up.iter().chain(&recent).find(|r| r.dep.trip_gtfs_id == gtfs).unwrap().clone();
+    (up, recent, r)
+}
+
+#[test]
+fn pick_row_keeps_vanished_choice() {
+    use pid_core::timetable::query::pick_row;
+    let ix = index();
+    let (_, _, chosen) = row(&ix, "T22b", prague(2026, 10, 26, 7, 59));
+    // O 10 minut později T22b ze seznamů zmizel – výběr nesmí přeskočit na jiný spoj.
+    let (up, recent, _) = row(&ix, "T22c", prague(2026, 10, 26, 8, 9));
+    assert!(up.iter().chain(&recent).all(|r| r.dep.trip_gtfs_id != "T22b"));
+    assert_eq!(pick_row(&up, &recent, Some(&chosen)).unwrap().dep.trip_gtfs_id, "T22b");
+}
+
+#[test]
+fn pick_row_defaults_to_first_upcoming() {
+    use pid_core::timetable::query::pick_row;
+    let ix = index();
+    let (up, recent, _) = row(&ix, "T22c", prague(2026, 10, 26, 8, 1));
+    assert_eq!(pick_row(&up, &recent, None).unwrap().dep.trip_gtfs_id, "T22c");
+}
+
+#[test]
+fn group_coords_of_first_stop() {
+    let ix = index();
+    let (lat, lon) = ix.group_coords(group(&ix, "Náměstí Míru"));
+    assert!((lat - 50.0755).abs() < 1e-6 && (lon - 14.4375).abs() < 1e-6);
+}

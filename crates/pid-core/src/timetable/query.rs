@@ -139,6 +139,11 @@ impl TimetableIndex {
         NearbyGroup { group, name: self.tt.group_name(group).to_string(), distance_m }
     }
 
+    /// Souřadnice prvního stanoviště skupiny (lat, lon).
+    pub fn group_coords(&self, group: u32) -> (f64, f64) {
+        self.stop_coords(self.group_first_stop(group))
+    }
+
     /// Staví ve skupině metro?
     pub fn group_has_metro(&self, group: u32) -> bool {
         self.group_has_metro[group as usize]
@@ -218,6 +223,21 @@ pub fn board_rows(deps: Vec<Departure>, delays: &Delays, now: DateTime<Tz>, rece
     let since = now - Duration::minutes(recent_min);
     let recent = next_rows_per_direction(gone.into_iter().rev().filter(|r| r.expected >= since).collect());
     (upcoming, recent)
+}
+
+/// Vybraný řádek tabule: zvolený spoj (aktuální verze z tabule, jinak jeho uložená podoba,
+/// i když už ze seznamu zmizel), bez volby nejbližší nadcházející.
+pub fn pick_row(up: &[BoardRow], recent: &[BoardRow], chosen: Option<&BoardRow>) -> Option<BoardRow> {
+    match chosen {
+        Some(c) => Some(
+            up.iter()
+                .chain(recent)
+                .find(|r| (r.dep.trip, r.dep.stop) == (c.dep.trip, c.dep.stop))
+                .unwrap_or(c)
+                .clone(),
+        ),
+        None => up.first().cloned(),
+    }
 }
 
 fn next_rows_per_direction(rows: Vec<BoardRow>) -> Vec<BoardRow> {
