@@ -6,6 +6,7 @@ mod interop;
 mod realtime;
 mod screens;
 mod state;
+mod stop_input;
 mod storage;
 mod sync;
 mod timetable_loader;

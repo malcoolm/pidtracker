@@ -8,7 +8,8 @@ use leptos::task::spawn_local;
 use pid_core::ride::{Ride, RideStatus};
 use pid_core::timetable::query::TimetableIndex;
 
-use crate::util::{keys, ls_get, ls_get_str, ls_remove, ls_set_str};
+use crate::interop::Fix;
+use crate::util::{keys, ls_get, ls_get_str, ls_remove, ls_set, ls_set_str};
 use crate::{storage, sync};
 
 #[derive(Clone)]
@@ -59,6 +60,8 @@ pub struct AppState {
     pub screen: RwSignal<Screen>,
     pub active_ride: RwSignal<Option<String>>,
     pub toast: RwSignal<Option<String>>,
+    /// Poslední úspěšně zjištěná poloha (i z dřívějšího spuštění).
+    pub last_fix: RwSignal<Option<Fix>>,
 }
 
 impl AppState {
@@ -73,6 +76,7 @@ impl AppState {
             screen: RwSignal::new(Screen::Home),
             active_ride: RwSignal::new(ls_get_str(keys::ACTIVE_RIDE)),
             toast: RwSignal::new(None),
+            last_fix: RwSignal::new(ls_get(keys::LAST_FIX)),
         }
     }
 
@@ -114,6 +118,16 @@ impl AppState {
                 Err(e) => state.toast.set(Some(format!("Uložení selhalo: {}", e.0))),
             }
         });
+    }
+
+    pub fn remember_fix(&self, f: Fix) {
+        ls_set(keys::LAST_FIX, &f);
+        self.last_fix.set(Some(f));
+    }
+
+    /// Poslední známá poloha jako (lat, lon).
+    pub fn last_pos(&self) -> Option<(f64, f64)> {
+        self.last_fix.get().map(|f| (f.lat, f.lon))
     }
 
     pub fn show_toast(&self, msg: impl Into<String>) {

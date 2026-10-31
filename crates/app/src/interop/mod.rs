@@ -103,7 +103,7 @@ extern "C" {
     fn on_online_js(cb: &Closure<dyn FnMut()>);
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Fix {
     pub lat: f64,
     pub lon: f64,

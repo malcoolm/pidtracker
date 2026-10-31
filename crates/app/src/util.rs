@@ -69,6 +69,7 @@ pub mod keys {
     pub const ACTIVE_RIDE: &str = "pt.active_ride_id";
     pub const LAST_SEEN_BUILD: &str = "pt.last_seen_build";
     pub const LAST_SYNC: &str = "pt.last_sync";
+    pub const LAST_FIX: &str = "pt.last_fix";
 }
 
 pub fn reload() {
