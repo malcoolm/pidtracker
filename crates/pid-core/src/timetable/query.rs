@@ -13,6 +13,8 @@ use crate::time::gtfs_instant;
 
 pub const MIN_RADIUS_M: f64 = 100.0;
 pub const MAX_RADIUS_M: f64 = 500.0;
+/// Při horší přesnosti polohy (typicky pod zemí) jdou stanice metra v nabídce dopředu.
+pub const METRO_FIRST_ACCURACY_M: f64 = 100.0;
 const FALLBACK_COUNT: usize = 5;
 const FALLBACK_RADIUS_M: f64 = 2000.0;
 const EXPIRING_DAYS: i64 = 2;
@@ -64,7 +66,12 @@ pub enum DataStatus {
 /// Zdroj odjezdů. Dnes statický GTFS, později třeba Golemio API.
 pub trait DepartureSource {
     fn nearby_groups(&self, lat: f64, lon: f64, accuracy_m: f64) -> Vec<NearbyGroup>;
-    fn search_groups(&self, query: &str, limit: usize) -> Vec<NearbyGroup>;
+    fn search_groups(&self, query: &str, limit: usize) -> Vec<NearbyGroup> {
+        self.search_groups_near(query, limit, None)
+    }
+    /// Hledání bez diakritiky; při stejné kvalitě shody blíž k `near` (lat, lon) dřív.
+    /// Prázdný dotaz s polohou vrátí nejbližší zastávky.
+    fn search_groups_near(&self, query: &str, limit: usize, near: Option<(f64, f64)>) -> Vec<NearbyGroup>;
     fn departures(&self, group: u32, at: DateTime<Tz>, before_min: i64, after_min: i64) -> Vec<Departure>;
     fn downstream_stops(&self, trip: u32, board_stop: u32, lat: Option<f64>, lon: Option<f64>) -> Vec<StopRef>;
     /// (route_id, short_name, route_type)
@@ -82,6 +89,7 @@ pub struct TimetableIndex {
     /// profile → rozsah v `tt.trips` (trips jsou seřazené podle (profile, start))
     profile_trips: Vec<(usize, usize)>,
     group_names_folded: Vec<String>,
+    group_has_metro: Vec<bool>,
 }
 
 impl TimetableIndex {
@@ -108,7 +116,13 @@ impl TimetableIndex {
             profile_trips[profile as usize] = (start, i);
         }
         let group_names_folded = tt.groups.iter().map(|g| fold(tt.string(g.name))).collect();
-        TimetableIndex { tt, stop_patterns, pattern_profiles, profile_trips, group_names_folded }
+        let mut group_has_metro = vec![false; tt.groups.len()];
+        for pattern in tt.patterns.iter().filter(|p| tt.routes[p.route as usize].route_type == 1) {
+            for &stop in &pattern.stops {
+                group_has_metro[tt.stops[stop as usize].group as usize] = true;
+            }
+        }
+        TimetableIndex { tt, stop_patterns, pattern_profiles, profile_trips, group_names_folded, group_has_metro }
     }
 
     fn stop_coords(&self, stop: u32) -> (f64, f64) {
@@ -123,6 +137,24 @@ impl TimetableIndex {
 
     fn group_ref(&self, group: u32, distance_m: f64) -> NearbyGroup {
         NearbyGroup { group, name: self.tt.group_name(group).to_string(), distance_m }
+    }
+
+    /// Staví ve skupině metro?
+    pub fn group_has_metro(&self, group: u32) -> bool {
+        self.group_has_metro[group as usize]
+    }
+
+    /// Vzdálenost každé skupiny (nejbližší stanoviště) od bodu.
+    fn group_distances(&self, lat: f64, lon: f64) -> Vec<f64> {
+        let mut best = vec![f64::INFINITY; self.tt.groups.len()];
+        for (i, stop) in self.tt.stops.iter().enumerate() {
+            let d = self.stop_distance(i as u32, lat, lon);
+            let slot = &mut best[stop.group as usize];
+            if d < *slot {
+                *slot = d;
+            }
+        }
+        best
     }
 
     /// Skupina, do které patří stanoviště.
@@ -212,37 +244,41 @@ fn match_rank(haystack: &str, needle: &str) -> Option<u8> {
 impl DepartureSource for TimetableIndex {
     fn nearby_groups(&self, lat: f64, lon: f64, accuracy_m: f64) -> Vec<NearbyGroup> {
         let radius = accuracy_m.clamp(MIN_RADIUS_M, MAX_RADIUS_M);
-        let mut best = vec![f64::INFINITY; self.tt.groups.len()];
-        for (i, stop) in self.tt.stops.iter().enumerate() {
-            let d = self.stop_distance(i as u32, lat, lon);
-            let slot = &mut best[stop.group as usize];
-            if d < *slot {
-                *slot = d;
-            }
-        }
         let mut all: Vec<NearbyGroup> =
-            best.iter().enumerate().map(|(g, &d)| self.group_ref(g as u32, d)).collect();
+            self.group_distances(lat, lon).iter().enumerate().map(|(g, &d)| self.group_ref(g as u32, d)).collect();
         all.sort_by(by_distance);
         let within: Vec<_> = all.iter().filter(|g| g.distance_m <= radius).cloned().collect();
-        if !within.is_empty() {
-            return within;
+        let mut out = if within.is_empty() {
+            all.into_iter().filter(|g| g.distance_m <= FALLBACK_RADIUS_M).take(FALLBACK_COUNT).collect()
+        } else {
+            within
+        };
+        if accuracy_m > METRO_FIRST_ACCURACY_M {
+            // Stabilní řazení: metro napřed, jinak podle vzdálenosti.
+            out.sort_by_key(|g| !self.group_has_metro(g.group));
         }
-        all.into_iter().filter(|g| g.distance_m <= FALLBACK_RADIUS_M).take(FALLBACK_COUNT).collect()
+        out
     }
 
-    fn search_groups(&self, query: &str, limit: usize) -> Vec<NearbyGroup> {
+    fn search_groups_near(&self, query: &str, limit: usize, near: Option<(f64, f64)>) -> Vec<NearbyGroup> {
         let q = fold(query.trim());
+        let dist = near.map(|(lat, lon)| self.group_distances(lat, lon));
+        let d = |g: usize| dist.as_ref().map_or(0.0, |v| v[g]);
         if q.is_empty() {
-            return Vec::new();
+            let Some(dist) = &dist else { return Vec::new() };
+            let mut all: Vec<NearbyGroup> = dist.iter().enumerate().map(|(g, &d)| self.group_ref(g as u32, d)).collect();
+            all.sort_by(by_distance);
+            all.truncate(limit);
+            return all;
         }
-        let mut hits: Vec<(u8, &str, u32)> = self
+        let mut hits: Vec<(u8, f64, &str, u32)> = self
             .group_names_folded
             .iter()
             .enumerate()
-            .filter_map(|(g, name)| match_rank(name, &q).map(|r| (r, name.as_str(), g as u32)))
+            .filter_map(|(g, name)| match_rank(name, &q).map(|r| (r, d(g), name.as_str(), g as u32)))
             .collect();
-        hits.sort();
-        hits.into_iter().take(limit).map(|(_, _, g)| self.group_ref(g, 0.0)).collect()
+        hits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(b.2)));
+        hits.into_iter().take(limit).map(|(_, dm, _, g)| self.group_ref(g, dm)).collect()
     }
 
     fn departures(&self, group: u32, at: DateTime<Tz>, before_min: i64, after_min: i64) -> Vec<Departure> {

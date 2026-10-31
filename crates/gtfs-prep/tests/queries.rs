@@ -174,3 +174,36 @@ fn departure_carries_stop_gtfs_id() {
     let d = ix.departures(group(&ix, "Náměstí Míru"), prague(2026, 10, 26, 7, 58), 5, 30);
     assert!(d.iter().any(|x| x.trip_gtfs_id == "T22b" && x.stop_gtfs_id == "U1Z2P"));
 }
+
+#[test]
+fn metro_first_when_inaccurate() {
+    let ix = index();
+    // U Jana Masaryka (bez metra), Náměstí Míru se stanicí A je ~250 m.
+    assert_eq!(ix.nearby_groups(50.0735, 14.4400, 400.0)[0].name, "Náměstí Míru");
+    assert_eq!(ix.nearby_groups(50.0735, 14.4400, 20.0)[0].name, "Jana Masaryka");
+}
+
+#[test]
+fn search_near_orders_equal_matches_by_distance() {
+    let ix = index();
+    let r = ix.search_groups_near("m", 5, Some((50.0755, 14.4375)));
+    assert_eq!(r[0].name, "Muzeum");
+    assert_eq!(r[1].name, "Náměstí Míru");
+    assert!(r[1].distance_m < 50.0);
+}
+
+#[test]
+fn search_near_empty_query_lists_nearest() {
+    let r = index().search_groups_near("", 3, Some((50.0735, 14.4400)));
+    assert_eq!(r[0].name, "Jana Masaryka");
+    assert_eq!(r.len(), 3);
+}
+
+#[test]
+fn search_diacritics_both_ways() {
+    let ix = index();
+    assert_eq!(ix.search_groups("RUS", 5)[0].name, "Ruská");
+    assert_eq!(ix.search_groups("rusk", 5)[0].name, "Ruská");
+    assert_eq!(ix.search_groups("Ruská", 5)[0].name, "Ruská");
+    assert_eq!(ix.search_groups("náměstí", 5)[0].name, "Náměstí Míru");
+}
