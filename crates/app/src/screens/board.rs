@@ -1,18 +1,31 @@
 //! Nástup: zastávka z polohy (nebo vyhledání), linka z jízdního řádu (nebo ručně), Start.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use chrono::DateTime;
+use chrono_tz::Tz;
+use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use pid_core::realtime::Delays;
 use pid_core::ride::{Ride, RideStatus, RouteKind};
-use pid_core::timetable::query::{Departure, DepartureSource, NearbyGroup, next_per_direction};
+use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows};
 
 use crate::components::{DataBanner, RouteBadge};
 use crate::config::BUILD_ID;
 use crate::interop::{Fix, current_position};
 use crate::state::{AppState, Screen};
+use crate::stop_input::StopInput;
 use crate::util::{css_color, kind_color, now, now_fixed};
 
-const BEFORE_MIN: i64 = 5;
+/// Okno dotazu do jízdního řádu (zpožděné spoje mohou mít čas v minulosti).
+const BEFORE_MIN: i64 = 15;
+/// „Právě odjelo“ – jak daleko do minulosti.
+const RECENT_MIN: i64 = 5;
 const AFTER_MIN: i64 = 30;
+const TICK_MS: u32 = 30_000;
+const DELAYS_REFRESH_MS: u32 = 60_000;
 
 /// Výběr zastávky: kandidáti z okolí, nebo výsledky vyhledávání.
 #[component]
@@ -64,10 +77,54 @@ pub fn GroupPicker(
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 enum LineChoice {
-    Departure(usize),
+    /// Nejbližší nadcházející spoj (výchozí).
+    Auto,
+    /// Ručně vybraný spoj; drží se, dokud je v seznamu.
+    Trip { trip: u32, stop: u32 },
     Manual,
+}
+
+fn row_key(r: &BoardRow) -> (u32, u32) {
+    (r.dep.trip, r.dep.stop)
+}
+
+/// „+2 min“ / „−1 min“; zpoždění pod minutu se neukazuje.
+fn delay_label(delay_s: Option<i32>) -> Option<(String, &'static str)> {
+    let d = delay_s?;
+    if d.abs() < 60 {
+        return None;
+    }
+    let mins = (d as f64 / 60.0).round() as i64;
+    Some(if mins > 0 { (format!("+{mins} min"), "delay late") } else { (format!("−{} min", -mins), "delay early") })
+}
+
+#[component]
+fn DepRow(row: BoardRow, at: DateTime<Tz>, choice: RwSignal<LineChoice>, selected: Signal<Option<(u32, u32)>>) -> impl IntoView {
+    let key = row_key(&row);
+    let mins = (row.expected - at).num_minutes();
+    let when = if mins <= 0 { "teď".to_string() } else { format!("za {mins} min") };
+    let delay = delay_label(row.delay_s);
+    let d = row.dep;
+    view! {
+        <button
+            class="dep-row"
+            class:selected=move || selected.get() == Some(key)
+            on:click=move |_| choice.set(LineChoice::Trip { trip: key.0, stop: key.1 })
+        >
+            <RouteBadge name=d.route_short_name.clone() color=d.color />
+            <span class="dep-head">{d.headsign.clone()}</span>
+            <span class="dep-time">
+                {d.time.format("%H:%M").to_string()}
+                " "
+                <small>
+                    {when}
+                    {delay.map(|(text, class)| view! { " · " <span class=class>{text}</span> })}
+                </small>
+            </span>
+        </button>
+    }
 }
 
 #[component]
@@ -77,22 +134,60 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
     let geo_msg = RwSignal::new(None::<String>);
     let locating = RwSignal::new(group.is_none());
     let selected_group = RwSignal::new(group);
+    let stop_text = RwSignal::new(String::new());
     let at = RwSignal::new(now());
-    let choice = RwSignal::new(LineChoice::Departure(0));
+    let delays = RwSignal::new(Delays::default());
+    let choice = RwSignal::new(LineChoice::Auto);
+    let show_recent = RwSignal::new(false);
     let manual_line = RwSignal::new(String::new());
     let manual_kind = RwSignal::new(None::<u16>);
-    let manual_stop = RwSignal::new(String::new());
-    let manual_stop_open = RwSignal::new(false);
 
     if group.is_none() {
         spawn_local(async move {
             match current_position().await {
-                Ok(f) => fix.set(Some(f)),
+                Ok(f) => {
+                    fix.set(Some(f));
+                    state.remember_fix(f);
+                }
                 Err(e) => geo_msg.set(Some(e.message().into())),
             }
             locating.set(false);
         });
     }
+
+    // Čas tabule se posouvá a zpoždění se obnovují, dokud je obrazovka otevřená.
+    let alive = Arc::new(AtomicBool::new(true));
+    {
+        let alive = alive.clone();
+        on_cleanup(move || alive.store(false, Ordering::Relaxed));
+    }
+    {
+        let alive = alive.clone();
+        spawn_local(async move {
+            loop {
+                TimeoutFuture::new(TICK_MS).await;
+                if !alive.load(Ordering::Relaxed) {
+                    break;
+                }
+                at.set(now());
+            }
+        });
+    }
+    spawn_local(async move {
+        loop {
+            let fetched = crate::realtime::fetch_delays().await;
+            if !alive.load(Ordering::Relaxed) {
+                break;
+            }
+            if let Some(d) = fetched {
+                delays.set(d);
+            }
+            TimeoutFuture::new(DELAYS_REFRESH_MS).await;
+            if !alive.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+    });
 
     let candidates = Signal::derive(move || {
         let Some(ix) = state.tt.get().index() else { return Vec::new() };
@@ -103,23 +198,41 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             (None, None) => Vec::new(),
         }
     });
+    let near = Signal::derive(move || fix.get().map(|f| (f.lat, f.lon)).or_else(|| state.last_pos()));
     Effect::new(move |_| {
         if selected_group.get_untracked().is_none()
+            && stop_text.get_untracked().trim().is_empty()
             && let Some(first) = candidates.get().first() {
                 selected_group.set(Some(first.group));
             }
     });
 
-    let departures: Memo<Vec<Departure>> = Memo::new(move |_| {
-        let (Some(ix), Some(g)) = (state.tt.get().index(), selected_group.get()) else { return Vec::new() };
-        next_per_direction(ix.departures(g, at.get(), BEFORE_MIN, AFTER_MIN))
+    let rows: Memo<(Vec<BoardRow>, Vec<BoardRow>)> = Memo::new(move |_| {
+        let (Some(ix), Some(g)) = (state.tt.get().index(), selected_group.get()) else { return Default::default() };
+        let t = at.get();
+        delays.with(|d| board_rows(ix.departures(g, t, BEFORE_MIN, AFTER_MIN), d, t, RECENT_MIN))
     });
+    // Vybraný řádek: ručně zvolený spoj, dokud je v seznamu, jinak nejbližší nadcházející.
+    let selected_row = Memo::new(move |_| {
+        rows.with(|(up, recent)| match choice.get() {
+            LineChoice::Manual => None,
+            LineChoice::Trip { trip, stop } => up
+                .iter()
+                .chain(recent)
+                .find(|r| row_key(r) == (trip, stop))
+                .or_else(|| up.first())
+                .cloned(),
+            LineChoice::Auto => up.first().cloned(),
+        })
+    });
+    let selected_key = Signal::derive(move || selected_row.with(|r| r.as_ref().map(row_key)));
     Effect::new(move |_| {
-        departures.track();
-        if departures.with_untracked(|d| d.is_empty()) {
+        let empty = rows.with(|(up, recent)| up.is_empty() && recent.is_empty());
+        let c = choice.get_untracked();
+        if empty {
             choice.set(LineChoice::Manual);
-        } else if choice.get_untracked() == LineChoice::Manual && manual_line.get_untracked().is_empty() {
-            choice.set(LineChoice::Departure(0));
+        } else if c == LineChoice::Manual && manual_line.get_untracked().is_empty() {
+            choice.set(LineChoice::Auto);
         }
     });
 
@@ -130,10 +243,10 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
     };
 
     let can_start = move || {
-        let stop_ok = selected_group.get().is_some() || !manual_stop.get().trim().is_empty();
+        let stop_ok = selected_group.get().is_some() || !stop_text.get().trim().is_empty();
         let line_ok = match choice.get() {
-            LineChoice::Departure(i) => departures.with(|d| i < d.len()),
             LineChoice::Manual => !manual_line.get().trim().is_empty(),
+            _ => selected_row.with(|r| r.is_some()),
         };
         stop_ok && line_ok
     };
@@ -149,11 +262,12 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
         let ix = state.tt.get_untracked().index();
         let t = now_fixed();
         let f = fix.get_untracked();
+        let group = selected_group.get_untracked();
         let mut ride = Ride {
             id: uuid::Uuid::new_v4().to_string(),
             person: me,
             board_stop_id: String::new(),
-            board_stop_name: manual_stop.get_untracked().trim().to_string(),
+            board_stop_name: stop_text.get_untracked().trim().to_string(),
             route_id: String::new(),
             route_short_name: String::new(),
             route_type: None,
@@ -177,16 +291,19 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             vehicle: String::new(),
             operator: String::new(),
         };
-        let manual = !ride.board_stop_name.is_empty();
-        if let (false, Some(ix), Some(g)) = (manual, &ix, selected_group.get_untracked()) {
+        if let (Some(ix), Some(g)) = (&ix, group) {
             ride.board_stop_name = ix.tt.group_name(g).to_string();
             ride.board_stop_id = ix.tt.stops[ix.group_first_stop(g) as usize].gtfs_id.clone();
         }
-        match choice.get_untracked() {
-            LineChoice::Departure(i) => {
-                let d = departures.with_untracked(|d| d[i].clone());
-                if let (false, Some(ix)) = (manual, &ix) {
-                    ride.board_stop_id = ix.tt.stops[d.stop as usize].gtfs_id.clone();
+        let row = match choice.get_untracked() {
+            LineChoice::Manual => None,
+            _ => selected_row.get_untracked(),
+        };
+        match row {
+            Some(r) => {
+                let d = r.dep;
+                if group.is_some() {
+                    ride.board_stop_id = d.stop_gtfs_id.clone();
                 }
                 ride.route_id = d.route_id;
                 ride.route_short_name = d.route_short_name;
@@ -196,7 +313,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
                 ride.operator = d.operator;
                 ride.pattern_id = Some(d.pattern);
             }
-            LineChoice::Manual => {
+            None => {
                 let name = manual_line.get_untracked().trim().to_string();
                 let found = ix.as_ref().and_then(|ix| ix.search_routes(&name, 1).into_iter().find(|r| r.1 == name));
                 match found {
@@ -231,65 +348,35 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             </Show>
             {move || fix.get().map(|f| view! { <p class="muted small">{format!("Přesnost polohy ±{:.0} m", f.accuracy_m)}</p> })}
             {move || geo_msg.get().map(|m| view! { <p class="warn">{m}</p> })}
-            <Show
-                when=has_tt
-                fallback=move || view! {
-                    <label>"Zastávka"
-                        <input type="text" placeholder="Název zastávky"
-                            prop:value=move || manual_stop.get()
-                            on:input=move |ev| manual_stop.set(event_target_value(&ev)) />
-                    </label>
-                }
-            >
-                <GroupPicker
-                    candidates=candidates
-                    selected=selected_group
-                    on_pick=Callback::new(move |_| {
-                        at.set(now());
-                        manual_stop.set(String::new());
-                        manual_stop_open.set(false);
-                        choice.set(LineChoice::Departure(0));
-                    })
-                />
-                <Show
-                    when=move || manual_stop_open.get()
-                    fallback=move || view! {
-                        <button class="link small" on:click=move |_| manual_stop_open.set(true)>"Zastávka není v seznamu? Zadat ručně"</button>
-                    }
-                >
-                    <input type="text" placeholder="Název zastávky"
-                        prop:value=move || manual_stop.get()
-                        on:input=move |ev| {
-                            manual_stop.set(event_target_value(&ev));
-                            selected_group.set(None);
-                        } />
-                </Show>
-            </Show>
+            <StopInput
+                text=stop_text
+                selected=selected_group
+                near=near
+                candidates=candidates
+                placeholder="Hledat zastávku nebo napsat název…"
+                on_pick=Callback::new(move |_| {
+                    at.set(now());
+                    choice.set(LineChoice::Auto);
+                })
+            />
 
             <h3>"Linka"</h3>
             <div class="list">
-                <For
-                    each={move || departures.get().into_iter().enumerate().collect::<Vec<_>>()}
-                    key=|(i, d)| (*i, d.trip, d.stop)
-                    let:item
-                >
-                    {
-                        let (i, d) = item;
-                        let mins = (d.time - now()).num_minutes();
-                        let when = if mins <= 0 { "teď".to_string() } else { format!("za {mins} min") };
-                        view! {
-                            <button
-                                class="dep-row"
-                                class:selected=move || choice.get() == LineChoice::Departure(i)
-                                on:click=move |_| choice.set(LineChoice::Departure(i))
-                            >
-                                <RouteBadge name=d.route_short_name.clone() color=d.color />
-                                <span class="dep-head">{d.headsign.clone()}</span>
-                                <span class="dep-time">{d.time.format("%H:%M").to_string()} <small>{when}</small></span>
-                            </button>
-                        }
-                    }
-                </For>
+                {move || {
+                    let t = at.get();
+                    rows.get().0.into_iter().map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key /> }).collect_view()
+                }}
+                <Show when=move || rows.with(|(_, recent)| !recent.is_empty())>
+                    <button class="link small" on:click=move |_| show_recent.update(|v| *v = !*v)>
+                        {move || format!("{} Právě odjelo ({})", if show_recent.get() { "▾" } else { "▸" }, rows.with(|(_, r)| r.len()))}
+                    </button>
+                    <Show when=move || show_recent.get()>
+                        {move || {
+                            let t = at.get();
+                            rows.get().1.into_iter().map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key /> }).collect_view()
+                        }}
+                    </Show>
+                </Show>
                 <button
                     class="dep-row"
                     class:selected=move || choice.get() == LineChoice::Manual

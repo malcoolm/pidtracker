@@ -302,3 +302,8 @@ h3.day { text-transform: none; letter-spacing: 0; font-size: 15px; }
   font-size: 12px;
   padding: 24px 0 0;
 }
+
+/* Zpoždění na tabuli Nástupu */
+.delay { font-weight: 700; }
+.delay.late { color: var(--danger); }
+.delay.early { color: var(--ok); }

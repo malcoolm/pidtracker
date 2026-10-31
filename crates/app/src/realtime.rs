@@ -1,7 +1,7 @@
-//! Doplnění čísla vozu z realtime feedu PID (best effort, nikdy neblokuje záznam jízdy).
+//! Realtime feed PID: číslo vozu a zpoždění (best effort, nikdy neblokuje záznam jízdy).
 
 use gloo_net::http::Request;
-use pid_core::realtime::{VEHICLE_POSITIONS_URL, vehicle_for_trip};
+use pid_core::realtime::{Delays, TRIP_UPDATES_URL, VEHICLE_POSITIONS_URL, parse_trip_delays, vehicle_for_trip};
 
 use crate::state::AppState;
 use crate::util::now_fixed;
@@ -26,4 +26,14 @@ pub async fn fill_vehicle(state: AppState, ride_id: String) {
         current.updated_at = now_fixed();
         state.save_ride(current);
     }
+}
+
+/// Aktuální zpoždění jedoucích spojů. Offline nebo chyba → `None`.
+pub async fn fetch_delays() -> Option<Delays> {
+    let resp = Request::get(TRIP_UPDATES_URL).send().await.ok()?;
+    if !resp.ok() {
+        return None;
+    }
+    let bytes = resp.binary().await.ok()?;
+    Some(parse_trip_delays(&bytes))
 }
