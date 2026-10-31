@@ -139,3 +139,38 @@ fn departure_carries_operator() {
     assert_eq!(d[0].operator, "Dopravní podnik hl. m. Prahy, akciová společnost");
     assert_eq!(d[1].operator, "Testovací dopravce s.r.o.");
 }
+
+#[test]
+fn board_rows_skip_departed_trip() {
+    use pid_core::realtime::Delays;
+    use pid_core::timetable::query::board_rows;
+    let ix = index();
+    let now = prague(2026, 10, 26, 8, 1);
+    let d = ix.departures(group(&ix, "Náměstí Míru"), now, 15, 30);
+    let (up, recent) = board_rows(d, &Delays::default(), now, 5);
+    assert_eq!(up[0].dep.trip_gtfs_id, "T22c");
+    assert_eq!(recent[0].dep.trip_gtfs_id, "T22b");
+    assert_eq!(up[0].delay_s, None);
+}
+
+#[test]
+fn board_rows_delayed_trip_is_upcoming() {
+    use pid_core::realtime::Delays;
+    use pid_core::timetable::query::board_rows;
+    let ix = index();
+    let now = prague(2026, 10, 26, 8, 1);
+    let d = ix.departures(group(&ix, "Náměstí Míru"), now, 15, 30);
+    let delays = Delays::from_pairs([("T22b", "U1Z2P", 120)]);
+    let (up, recent) = board_rows(d, &delays, now, 5);
+    assert_eq!(up[0].dep.trip_gtfs_id, "T22b");
+    assert_eq!(up[0].delay_s, Some(120));
+    assert_eq!(up[0].expected, prague(2026, 10, 26, 8, 2));
+    assert!(recent.is_empty());
+}
+
+#[test]
+fn departure_carries_stop_gtfs_id() {
+    let ix = index();
+    let d = ix.departures(group(&ix, "Náměstí Míru"), prague(2026, 10, 26, 7, 58), 5, 30);
+    assert!(d.iter().any(|x| x.trip_gtfs_id == "T22b" && x.stop_gtfs_id == "U1Z2P"));
+}

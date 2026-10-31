@@ -7,6 +7,7 @@ use chrono_tz::Tz;
 
 use super::{NO_DROP_OFF, NO_PICKUP, Timetable};
 use crate::geo::haversine_m;
+use crate::realtime::Delays;
 use crate::text::fold;
 use crate::time::gtfs_instant;
 
@@ -15,6 +16,8 @@ pub const MAX_RADIUS_M: f64 = 500.0;
 const FALLBACK_COUNT: usize = 5;
 const FALLBACK_RADIUS_M: f64 = 2000.0;
 const EXPIRING_DAYS: i64 = 2;
+/// Spoj se považuje za odjetý až tolik sekund po očekávaném odjezdu.
+pub const DEPARTED_GRACE_S: i64 = 30;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NearbyGroup {
@@ -29,6 +32,8 @@ pub struct Departure {
     pub trip: u32,
     /// Stanoviště, ze kterého spoj odjíždí.
     pub stop: u32,
+    /// GTFS stop_id stanoviště (pro párování s realtime daty).
+    pub stop_gtfs_id: String,
     pub route_short_name: String,
     pub route_id: String,
     pub route_type: u16,
@@ -153,6 +158,41 @@ pub fn next_per_direction(departures: Vec<Departure>) -> Vec<Departure> {
         .collect()
 }
 
+/// Odjezd na tabuli Nástupu: jízdní řád + zpoždění z realtime dat.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoardRow {
+    pub dep: Departure,
+    /// Zpoždění v sekundách (záporné = náskok), `None` = neznámé.
+    pub delay_s: Option<i32>,
+    /// Očekávaný odjezd (jízdní řád + zpoždění).
+    pub expected: DateTime<Tz>,
+}
+
+/// Rozdělí odjezdy na nadcházející (nejbližší neodjetý spoj pro každou linku a směr,
+/// podle očekávaného času) a právě odjeté (posledních `recent_min` minut, nejnovější první).
+pub fn board_rows(deps: Vec<Departure>, delays: &Delays, now: DateTime<Tz>, recent_min: i64) -> (Vec<BoardRow>, Vec<BoardRow>) {
+    let mut rows: Vec<BoardRow> = deps
+        .into_iter()
+        .map(|dep| {
+            let delay_s = delays.at(&dep.trip_gtfs_id, &dep.stop_gtfs_id);
+            let expected = dep.time + Duration::seconds(delay_s.unwrap_or(0) as i64);
+            BoardRow { dep, delay_s, expected }
+        })
+        .collect();
+    rows.sort_by(|a, b| a.expected.cmp(&b.expected).then_with(|| a.dep.route_short_name.cmp(&b.dep.route_short_name)));
+    let departed = |r: &BoardRow| r.expected + Duration::seconds(DEPARTED_GRACE_S) < now;
+    let (gone, coming): (Vec<_>, Vec<_>) = rows.into_iter().partition(departed);
+    let upcoming = next_rows_per_direction(coming);
+    let since = now - Duration::minutes(recent_min);
+    let recent = next_rows_per_direction(gone.into_iter().rev().filter(|r| r.expected >= since).collect());
+    (upcoming, recent)
+}
+
+fn next_rows_per_direction(rows: Vec<BoardRow>) -> Vec<BoardRow> {
+    let mut seen = std::collections::HashSet::new();
+    rows.into_iter().filter(|r| seen.insert((r.dep.route_id.clone(), r.dep.headsign.clone()))).collect()
+}
+
 fn by_distance(a: &NearbyGroup, b: &NearbyGroup) -> Ordering {
     a.distance_m.partial_cmp(&b.distance_m).unwrap_or(Ordering::Equal)
 }
@@ -241,6 +281,7 @@ impl DepartureSource for TimetableIndex {
                             out.push(Departure {
                                 trip: (lo + first + k) as u32,
                                 stop,
+                                stop_gtfs_id: self.tt.stops[stop as usize].gtfs_id.clone(),
                                 route_short_name: route.short_name.clone(),
                                 route_id: route.gtfs_id.clone(),
                                 route_type: route.route_type,
