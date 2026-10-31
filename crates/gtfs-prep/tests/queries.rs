@@ -207,3 +207,11 @@ fn search_diacritics_both_ways() {
     assert_eq!(ix.search_groups("Ruská", 5)[0].name, "Ruská");
     assert_eq!(ix.search_groups("náměstí", 5)[0].name, "Náměstí Míru");
 }
+
+#[test]
+fn node_with_two_names_gives_two_groups() {
+    // Uzel 1 má stanoviště „Náměstí Míru“ i „Jugoslávská“ (jako Můstek / Václavské náměstí v uzlu 1072).
+    let ix = index();
+    assert_eq!(ix.search_groups("jugo", 5)[0].name, "Jugoslávská");
+    assert_eq!(ix.search_groups("namesti miru", 5)[0].name, "Náměstí Míru");
+}

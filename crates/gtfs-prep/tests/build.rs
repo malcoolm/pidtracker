@@ -25,8 +25,8 @@ fn service_on(t: &Timetable, trip_gtfs_id: &str, d: NaiveDate) -> bool {
 #[test]
 fn builds_mini_feed() {
     let t = build();
-    assert_eq!(t.stops.len(), 6);
-    assert_eq!(t.groups.len(), 4);
+    assert_eq!(t.stops.len(), 7);
+    assert_eq!(t.groups.len(), 5);
     assert_eq!(t.trips.len(), 5);
     assert_eq!(t.patterns.len(), 2);
     assert_eq!(t.profiles.len(), 2);

@@ -171,7 +171,8 @@ pub fn build_timetable(gtfs_dir: &Path, generated_at: DateTime<Utc>) -> Result<T
         }
         let name = field(&rec, c_name);
         let node = opt_field(&rec, c_node);
-        let key = if node.is_empty() { format!("name:{name}") } else { format!("node:{node}") };
+        // Uzel + název: jeden uzel PID může mít víc jmen (Můstek vs. Václavské náměstí v uzlu 1072).
+        let key = if node.is_empty() { format!("name:{name}") } else { format!("node:{node}:{name}") };
         let stop_idx = stops.len() as u32;
         let group = *group_index.entry(key).or_insert_with(|| {
             groups.push(StopGroup { name: strings.intern(name), stops: Vec::new() });
