@@ -58,3 +58,17 @@ přesměrováním.
 - [ ] Po novém nasazení (push do `main`) se aplikace sama aktualizuje při návratu
       na úvodní obrazovku a krátce ukáže „Aktualizováno na verzi …“.
       Rozpracovaná jízda aktualizaci přežije.
+
+## Kontrolní bod F – verze 0.4.0
+
+- [ ] Do 4. 11. je aplikace v halloweenském vzhledu (tmavě šedá, oranžová, pavouk, kostlivci,
+      čarodějnice), od 5. 11. se sama vrátí k původnímu. Vynucení pro test: `?halloween=1`.
+- [ ] V metru na Můstku: **Nová jízda** → první nabídnutá zastávka je **Můstek**
+      (stanice metra jdou při nepřesné poloze dopředu), ne Václavské náměstí.
+- [ ] V seznamu odjezdů je nahoře nejbližší vlak, který ještě neodjel. Starší spoje jsou
+      pod **Právě odjelo**. Seznam se sám posouvá.
+- [ ] U tramvají a autobusů na trase je vidět zpoždění („+3 min“). Offline seznam funguje bez něj.
+- [ ] V **Úpravě jízdy** napište „mus“ → nabídne se Můstek (i bez diakritiky).
+- [ ] U probíhající jízdy vyplňte **SPZ** → v Historii je „vůz 8758 · 1AB 2345“, ve Statistikách
+      u vozu také. Další jízda stejným vozem má SPZ předvyplněnou.
+- [ ] V tabulce přibyl sloupec `license_plate` (AA).
