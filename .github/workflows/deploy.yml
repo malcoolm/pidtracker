@@ -32,9 +32,9 @@ jobs:
         with:
           tool: trunk
       - name: Tests
-        run: cargo test --workspace --exclude app
+        run: cargo test --workspace --exclude app --locked
       - name: Build dist
-        run: cargo xtask dist --public-url /${{ github.event.repository.name }}/ --fetch-gtfs
+        run: cargo --locked xtask dist --public-url /${{ github.event.repository.name }}/ --fetch-gtfs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
