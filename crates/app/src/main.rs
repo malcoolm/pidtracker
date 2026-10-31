@@ -2,6 +2,7 @@ mod app;
 mod components;
 mod config;
 mod google;
+mod halloween;
 mod interop;
 mod realtime;
 mod screens;

@@ -3,6 +3,7 @@
 pub mod geo;
 pub mod realtime;
 pub mod ride;
+pub mod season;
 pub mod sheet;
 pub mod text;
 pub mod stats;

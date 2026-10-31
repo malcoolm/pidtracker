@@ -307,3 +307,39 @@ h3.day { text-transform: none; letter-spacing: 0; font-size: 15px; }
 .delay { font-weight: 700; }
 .delay.late { color: var(--danger); }
 .delay.early { color: var(--ok); }
+
+/* Halloween (24. 10. – 4. 11.): třída na <html> přepíše barvy, dekorace jsou za obsahem. */
+html.halloween {
+  --bg: #2a2b30;
+  --surface: #36373d;
+  --fg: #fff3e6;
+  --muted: #b9ae9f;
+  --border: #4a4b52;
+  --accent: #ff8c1a;
+  --accent-fg: #2a2b30;
+  --accent-soft: #3f3a35;
+  --warn: #ffd166;
+  --warn-bg: #3a3222;
+  --danger: #ff6b5a;
+  --danger-bg: #3a2522;
+  --ok: #8fd18f;
+  color-scheme: dark;
+}
+html.halloween h1,
+html.halloween h2,
+html.halloween h3 {
+  font-family: "Chalkboard SE", "Comic Sans MS", "Segoe Print", cursive;
+  color: #ffa040;
+}
+html.halloween h2::after { content: " 🎃"; }
+html.halloween .delay.late { color: #ffd166; }
+html.halloween .app { position: relative; z-index: 1; }
+.hw-deco { position: fixed; inset: 0; pointer-events: none; z-index: 0; color: #55565c; }
+.hw-deco svg { position: absolute; }
+.hw-web { top: 0; left: 0; width: 90px; height: 90px; }
+.hw-spider { top: 0; left: 52px; width: 22px; height: 64px; color: #ff8c1a; opacity: .85; }
+.hw-witch { top: calc(env(safe-area-inset-top) + 6px); right: 12px; width: 84px; height: 48px; color: #6a6b72; }
+.hw-skel { bottom: calc(env(safe-area-inset-bottom) + var(--nav-h) + 4px); width: 30px; height: 60px; color: #8a857c; opacity: .55; }
+.hw-skel-1 { left: 10px; }
+.hw-skel-2 { left: 46px; transform: scaleX(-1); }
+.hw-eye { fill: var(--bg); }
