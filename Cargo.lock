@@ -95,7 +95,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -850,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "gtfs-prep"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1447,7 +1447,7 @@ dependencies = [
 
 [[package]]
 name = "pid-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -2653,12 +2653,13 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "chrono",
  "clap",
  "gtfs-prep",
+ "pid-core",
  "serde_json",
 ]
 

@@ -104,6 +104,13 @@ fn git_hash() -> String {
     if dirty { format!("{hash}-dirty") } else { hash }
 }
 
+/// Sezónní sada ikon (relativně ke kořeni repa), která v daný den nahradí `dist/icons`.
+const HALLOWEEN_ICONS: &str = "crates/app/public/icons-halloween";
+
+fn seasonal_icons(date: chrono::NaiveDate) -> Option<&'static str> {
+    pid_core::season::is_halloween(date).then_some(HALLOWEEN_ICONS)
+}
+
 fn dist(public_url: &str, data: DataSource) -> Result<()> {
     let root = root();
     let dist = root.join("dist");
@@ -121,6 +128,15 @@ fn dist(public_url: &str, data: DataSource) -> Result<()> {
         .context("spuštění trunk (nainstaluj: cargo install trunk --locked)")?;
     if !status.success() {
         bail!("trunk build selhal");
+    }
+
+    // Ikona na ploše iPhonu se bere při přidání na plochu, proto se sezónní sada nasazuje buildem.
+    if let Some(dir) = seasonal_icons(now.with_timezone(&pid_core::time::TZ).date_naive()) {
+        for entry in std::fs::read_dir(root.join(dir))? {
+            let entry = entry?;
+            std::fs::copy(entry.path(), dist.join("icons").join(entry.file_name()))?;
+        }
+        println!("sezónní ikony: {dir}");
     }
 
     let version_json = serde_json::json!({
@@ -161,6 +177,15 @@ fn dist(public_url: &str, data: DataSource) -> Result<()> {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn halloween_icons_only_in_season() {
+        let d = |m, dd| chrono::NaiveDate::from_ymd_opt(2027, m, dd).unwrap();
+        assert_eq!(seasonal_icons(d(10, 23)), None);
+        assert_eq!(seasonal_icons(d(10, 24)), Some(HALLOWEEN_ICONS));
+        assert_eq!(seasonal_icons(d(11, 4)), Some(HALLOWEEN_ICONS));
+        assert_eq!(seasonal_icons(d(11, 5)), None);
+    }
 
     #[test]
     fn build_id_format() {

@@ -6,6 +6,9 @@ on:
   schedule:
     # Každé pondělí 03:30 UTC – PID GTFS platí jen 14 dní.
     - cron: "30 3 * * 1"
+    # Sezónní ikona aplikace: zapnout 24. 10., vrátit 5. 11. (viz cargo xtask dist).
+    - cron: "30 3 24 10 *"
+    - cron: "30 3 5 11 *"
   workflow_dispatch:
 
 permissions:
