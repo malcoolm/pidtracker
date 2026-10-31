@@ -154,6 +154,13 @@ pub fn known_plate(rides: &[Ride], vehicle: &str) -> Option<String> {
         .map(|r| r.license_plate.trim().to_string())
 }
 
+/// Po změně čísla vozu: SPZ podle jiných jízd nového vozu, jinak prázdná
+/// (původní SPZ patřila jinému vozu).
+pub fn on_vehicle_changed(ride: &mut Ride, all: &[Ride]) {
+    let others: Vec<Ride> = all.iter().filter(|r| r.id != ride.id).cloned().collect();
+    ride.license_plate = known_plate(&others, &ride.vehicle).unwrap_or_default();
+}
+
 /// Doplní prázdnou SPZ podle dřívějších jízd stejného vozu. Vrací, zda se něco změnilo.
 pub fn apply_known_plate(ride: &mut Ride, all: &[Ride]) -> bool {
     if !ride.license_plate.trim().is_empty() {
@@ -275,5 +282,44 @@ mod plate_tests {
         let mut manual = ride("3", "8758", "9XY 9999", "2026-10-06T08:00:00+02:00");
         assert!(!apply_known_plate(&mut manual, &all));
         assert_eq!(manual.license_plate, "9XY 9999");
+    }
+}
+
+#[cfg(test)]
+mod vehicle_change_tests {
+    use super::tests::sample_ride;
+    use super::*;
+
+    fn ride(id: &str, vehicle: &str, plate: &str) -> Ride {
+        let mut r = sample_ride();
+        r.id = id.into();
+        r.vehicle = vehicle.into();
+        r.license_plate = plate.into();
+        r
+    }
+
+    #[test]
+    fn new_vehicle_takes_its_known_plate() {
+        let all = vec![ride("1", "9355", "2CD 0000"), ride("2", "8758", "1AB 2345")];
+        let mut r = ride("2", "9355", "1AB 2345");
+        on_vehicle_changed(&mut r, &all);
+        assert_eq!(r.license_plate, "2CD 0000");
+    }
+
+    #[test]
+    fn unknown_new_vehicle_clears_old_plate() {
+        let all = vec![ride("2", "8758", "1AB 2345")];
+        let mut r = ride("2", "1234", "1AB 2345");
+        on_vehicle_changed(&mut r, &all);
+        assert_eq!(r.license_plate, "");
+    }
+
+    #[test]
+    fn own_stored_version_is_ignored() {
+        // Uložená podoba téže jízdy (stejné číslo vozu) nesmí vrátit SPZ, kterou uživatel právě smazal.
+        let all = vec![ride("2", "8758", "1AB 2345")];
+        let mut r = ride("2", "8758", "");
+        on_vehicle_changed(&mut r, &all);
+        assert_eq!(r.license_plate, "");
     }
 }

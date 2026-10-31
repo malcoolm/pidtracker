@@ -10,14 +10,14 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::realtime::Delays;
 use pid_core::ride::{Ride, RideStatus, RouteKind};
-use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows, pick_row};
+use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows, pick_row, when_label};
 
 use crate::components::{DataBanner, RouteBadge};
 use crate::config::BUILD_ID;
 use crate::interop::{Fix, current_position};
 use crate::state::{AppState, Screen};
 use crate::stop_input::StopInput;
-use crate::util::{css_color, kind_color, now, now_fixed};
+use crate::util::{css_color, kind_color, now, now_fixed, page_hidden};
 
 /// Okno dotazu do jízdního řádu (zpožděné spoje mohou mít čas v minulosti).
 const BEFORE_MIN: i64 = 15;
@@ -57,8 +57,7 @@ fn delay_label(delay_s: Option<i32>) -> Option<(String, &'static str)> {
 fn DepRow(row: BoardRow, at: DateTime<Tz>, choice: RwSignal<LineChoice>, selected: Signal<Option<(u32, u32)>>) -> impl IntoView {
     let key = row_key(&row);
     let picked = row.clone();
-    let mins = (row.expected - at).num_minutes();
-    let when = if mins <= 0 { "teď".to_string() } else { format!("za {mins} min") };
+    let when = when_label(row.expected, at);
     let delay = delay_label(row.delay_s);
     let d = row.dep;
     view! {
@@ -127,20 +126,41 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             }
         });
     }
-    spawn_local(async move {
-        loop {
-            let fetched = crate::realtime::fetch_delays().await;
-            if !alive.load(Ordering::Relaxed) {
-                break;
+    // Zpoždění: ~1,3 MB na stažení, proto jen když je aplikace vidět.
+    {
+        let alive = alive.clone();
+        spawn_local(async move {
+            loop {
+                if !page_hidden() {
+                    let fetched = crate::realtime::fetch_delays().await;
+                    if !alive.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if let Some(d) = fetched {
+                        delays.set(d);
+                    }
+                }
+                TimeoutFuture::new(DELAYS_REFRESH_MS).await;
+                if !alive.load(Ordering::Relaxed) {
+                    break;
+                }
             }
-            if let Some(d) = fetched {
-                delays.set(d);
-            }
-            TimeoutFuture::new(DELAYS_REFRESH_MS).await;
-            if !alive.load(Ordering::Relaxed) {
-                break;
-            }
+        });
+    }
+    // Návrat z pozadí: hned přepočítat časy a stáhnout čerstvá zpoždění.
+    Effect::new(move |prev: Option<u32>| {
+        let n = state.foreground.get();
+        if prev.is_some_and(|p| p != n) {
+            at.set(now());
+            let alive = alive.clone();
+            spawn_local(async move {
+                let fetched = crate::realtime::fetch_delays().await;
+                if alive.load(Ordering::Relaxed) && let Some(d) = fetched {
+                    delays.set(d);
+                }
+            });
         }
+        n
     });
 
     let candidates = Signal::derive(move || {

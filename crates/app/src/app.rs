@@ -33,7 +33,10 @@ pub fn App() -> impl IntoView {
 
     // Sezónní vzhled podle data; přepočet při návratu do popředí (např. 5. 11. ráno).
     let halloween = RwSignal::new(apply_season());
-    crate::interop::on_visible(move || halloween.set(apply_season()));
+    crate::interop::on_visible(move || {
+        halloween.set(apply_season());
+        state.foreground.update(|n| *n += 1);
+    });
 
     let needs_setup = move || state.me.get().is_none();
 

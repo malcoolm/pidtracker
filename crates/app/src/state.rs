@@ -62,6 +62,8 @@ pub struct AppState {
     pub toast: RwSignal<Option<String>>,
     /// Poslední úspěšně zjištěná poloha (i z dřívějšího spuštění).
     pub last_fix: RwSignal<Option<Fix>>,
+    /// Zvýší se při každém návratu aplikace do popředí.
+    pub foreground: RwSignal<u32>,
 }
 
 impl AppState {
@@ -77,6 +79,7 @@ impl AppState {
             active_ride: RwSignal::new(ls_get_str(keys::ACTIVE_RIDE)),
             toast: RwSignal::new(None),
             last_fix: RwSignal::new(ls_get(keys::LAST_FIX)),
+            foreground: RwSignal::new(0),
         }
     }
 

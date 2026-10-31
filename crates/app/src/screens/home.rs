@@ -3,7 +3,7 @@
 use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use pid_core::ride::{Ride, apply_known_plate};
+use pid_core::ride::{Ride, on_vehicle_changed};
 
 use crate::components::{DataBanner, RideRow, RouteBadge, ride_color};
 use crate::state::{AppState, Screen};
@@ -109,8 +109,12 @@ fn Running(ride: Ride) -> impl IntoView {
                         let id = ride.id.clone();
                         move |ev| {
                             if let Some(mut r) = state.ride(&id) {
-                                r.vehicle = event_target_value(&ev).trim().to_string();
-                                state.rides.with_untracked(|all| apply_known_plate(&mut r, all));
+                                let vehicle = event_target_value(&ev).trim().to_string();
+                                if vehicle == r.vehicle {
+                                    return;
+                                }
+                                r.vehicle = vehicle;
+                                state.rides.with_untracked(|all| on_vehicle_changed(&mut r, all));
                                 r.updated_at = now_fixed();
                                 state.save_ride(r);
                             }

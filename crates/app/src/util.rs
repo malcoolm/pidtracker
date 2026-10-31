@@ -72,6 +72,11 @@ pub mod keys {
     pub const LAST_FIX: &str = "pt.last_fix";
 }
 
+/// Je aplikace na pozadí (zamčený telefon, jiná aplikace)?
+pub fn page_hidden() -> bool {
+    web_sys::window().and_then(|w| w.document()).is_some_and(|d| d.hidden())
+}
+
 pub fn reload() {
     if let Some(w) = web_sys::window() {
         let _ = w.location().reload();

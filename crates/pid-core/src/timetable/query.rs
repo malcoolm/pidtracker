@@ -240,6 +240,16 @@ pub fn pick_row(up: &[BoardRow], recent: &[BoardRow], chosen: Option<&BoardRow>)
     }
 }
 
+/// „za 3 min“, „teď“, „před 3 min“ (celé minuty, okolí ±1 min je „teď“).
+pub fn when_label(expected: DateTime<Tz>, now: DateTime<Tz>) -> String {
+    let m = (expected - now).num_minutes();
+    match m {
+        1.. => format!("za {m} min"),
+        0 => "teď".to_string(),
+        _ => format!("před {} min", -m),
+    }
+}
+
 fn next_rows_per_direction(rows: Vec<BoardRow>) -> Vec<BoardRow> {
     let mut seen = std::collections::HashSet::new();
     rows.into_iter().filter(|r| seen.insert((r.dep.route_id.clone(), r.dep.headsign.clone()))).collect()
@@ -419,5 +429,22 @@ impl DepartureSource for TimetableIndex {
 
     fn version(&self) -> &str {
         &self.tt.version
+    }
+}
+
+#[cfg(test)]
+mod when_tests {
+    use super::*;
+    use crate::time::TZ;
+    use chrono::TimeZone;
+
+    #[test]
+    fn when_label_future_now_past() {
+        let t = |h, m, s| TZ.with_ymd_and_hms(2026, 10, 31, h, m, s).unwrap();
+        let now = t(21, 0, 0);
+        assert_eq!(when_label(t(21, 3, 0), now), "za 3 min");
+        assert_eq!(when_label(t(21, 0, 40), now), "teď");
+        assert_eq!(when_label(t(20, 59, 30), now), "teď");
+        assert_eq!(when_label(t(20, 57, 0), now), "před 3 min");
     }
 }

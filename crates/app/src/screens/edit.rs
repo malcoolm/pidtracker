@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone};
 use leptos::prelude::*;
-use pid_core::ride::{Ride, RideStatus, RouteKind, apply_known_plate};
+use pid_core::ride::{Ride, RideStatus, RouteKind, on_vehicle_changed};
 use pid_core::time::TZ;
 use pid_core::timetable::query::DepartureSource;
 
@@ -130,9 +130,16 @@ pub fn Edit(id: String) -> impl IntoView {
             r.route_type = kind.get_untracked();
         }
         r.board_time = bt;
-        r.vehicle = vehicle.get_untracked().trim().to_string();
-        r.license_plate = plate.get_untracked().trim().to_string();
-        state.rides.with_untracked(|all| apply_known_plate(&mut r, all));
+        let new_vehicle = vehicle.get_untracked().trim().to_string();
+        let new_plate = plate.get_untracked().trim().to_string();
+        let vehicle_changed = new_vehicle != r.vehicle;
+        let plate_touched = new_plate != r.license_plate;
+        r.vehicle = new_vehicle;
+        r.license_plate = new_plate;
+        // Jiný vůz → SPZ podle nového vozu, pokud ji uživatel v téže úpravě sám nepřepsal.
+        if vehicle_changed && !plate_touched {
+            state.rides.with_untracked(|all| on_vehicle_changed(&mut r, all));
+        }
         r.operator = operator.get_untracked().trim().to_string();
         r.alight_time = at;
         if at.is_some() {

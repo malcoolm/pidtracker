@@ -178,6 +178,7 @@ fn sorted_counts<K: Ord + Clone>(map: HashMap<K, u32>) -> Vec<(K, u32)> {
 }
 
 pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
+    let all_rides = rides;
     let wanted: Vec<String> = q.persons.iter().map(|p| p.to_lowercase()).collect();
     let mut per_person: BTreeMap<String, Vec<&Ride>> = wanted.iter().map(|p| (p.clone(), Vec::new())).collect();
     for r in rides {
@@ -216,10 +217,10 @@ pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
             top_routes.truncate(TOP_ROUTES);
             let mut by_vehicle = sorted_counts(vehicles);
             by_vehicle.truncate(TOP_VEHICLES);
-            let owned: Vec<Ride> = rides.iter().map(|r| (*r).clone()).collect();
+            // SPZ ze všech jízd vozu (i jiné osoby a mimo období) – vůz má pořád stejnou.
             let by_vehicle = by_vehicle
                 .into_iter()
-                .map(|(vehicle, n)| VehicleCount { plate: crate::ride::known_plate(&owned, &vehicle), vehicle, rides: n })
+                .map(|(vehicle, n)| VehicleCount { plate: crate::ride::known_plate(all_rides, &vehicle), vehicle, rides: n })
                 .collect();
             let dates: Vec<NaiveDate> = rides.iter().map(|r| local_date(r)).collect();
             PersonStats {
@@ -409,5 +410,34 @@ mod operator_vehicle_tests {
             .collect();
         let s = compute(&rides, &StatsQuery { period: Period::All, persons: vec![] });
         assert_eq!(s[0].by_vehicle.len(), TOP_VEHICLES);
+    }
+}
+
+#[cfg(test)]
+mod plate_lookup_tests {
+    use super::*;
+    use crate::ride::tests::sample_ride;
+    use chrono::{DateTime, Duration};
+
+    #[test]
+    fn plate_comes_from_any_ride_of_vehicle() {
+        let mk = |id: &str, person: &str, plate: &str, start: &str| {
+            let mut r = sample_ride();
+            r.id = id.into();
+            r.person = person.into();
+            r.vehicle = "8758".into();
+            r.license_plate = plate.into();
+            r.board_time = DateTime::parse_from_rfc3339(start).unwrap();
+            r.alight_time = Some(r.board_time + Duration::minutes(10));
+            r
+        };
+        let rides = vec![
+            mk("1", "tata@gmail.com", "", "2026-10-05T08:00:00+02:00"),
+            // Syn, jiný měsíc – SPZ se má přesto použít.
+            mk("2", "syn@gmail.com", "1AB 2345", "2026-09-01T08:00:00+02:00"),
+        ];
+        let q = StatsQuery { period: Period::Month { year: 2026, month: 10 }, persons: vec!["tata@gmail.com".into()] };
+        let s = compute(&rides, &q);
+        assert_eq!(s[0].by_vehicle[0].plate.as_deref(), Some("1AB 2345"));
     }
 }
