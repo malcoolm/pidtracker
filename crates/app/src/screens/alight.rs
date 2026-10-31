@@ -6,8 +6,8 @@ use pid_core::ride::RideStatus;
 use pid_core::timetable::query::{DepartureSource, StopRef};
 
 use crate::interop::{Fix, current_position};
-use crate::screens::board::GroupPicker;
 use crate::state::{AppState, Screen};
+use crate::stop_input::StopInput;
 use crate::util::now_fixed;
 
 #[derive(Clone, PartialEq)]
@@ -29,14 +29,17 @@ pub fn Alight() -> impl IntoView {
     let locating = RwSignal::new(true);
     let choice = RwSignal::new(None::<Choice>);
     let picked_group = RwSignal::new(None::<u32>);
-    let manual_stop = RwSignal::new(String::new());
+    let stop_text = RwSignal::new(String::new());
     let alight_time = now_fixed();
 
     // Číslo vozu se nepodařilo zjistit při nástupu (offline)? Zkusit znovu, spoj ještě jede.
     spawn_local(crate::realtime::fill_vehicle(state, ride.id.clone()));
     spawn_local(async move {
         match current_position().await {
-            Ok(f) => fix.set(Some(f)),
+            Ok(f) => {
+                fix.set(Some(f));
+                state.remember_fix(f);
+            }
             Err(e) => geo_msg.set(Some(e.message().into())),
         }
         locating.set(false);
@@ -75,9 +78,18 @@ pub fn Alight() -> impl IntoView {
         }
     });
 
+    let near = Signal::derive(move || fix.get().map(|f| (f.lat, f.lon)).or_else(|| state.last_pos()));
+    // Psaní do pole = ruční zastávka (výběr z návrhů nastaví skupinu přes on_pick).
+    Effect::new(move |_| {
+        let typed = !stop_text.get().trim().is_empty();
+        if picked_group.get().is_none() && typed {
+            choice.set(Some(Choice::Manual));
+        }
+    });
+
     // Bez zvolené zastávky nejde jízdu uložit (jinak by vznikla jízda bez cíle).
     let can_finish = move || match choice.get() {
-        Some(Choice::Manual) => !manual_stop.get().trim().is_empty(),
+        Some(Choice::Manual) => !stop_text.get().trim().is_empty(),
         Some(_) => true,
         None => false,
     };
@@ -100,7 +112,7 @@ pub fn Alight() -> impl IntoView {
                 next_group = Some(g);
             }
             Some(Choice::Manual) | None => {
-                let name = manual_stop.get_untracked().trim().to_string();
+                let name = stop_text.get_untracked().trim().to_string();
                 r.alight_stop_name = (!name.is_empty()).then_some(name);
             }
         }
@@ -127,7 +139,11 @@ pub fn Alight() -> impl IntoView {
                     move || choice.get() == Some(Choice::OnRoute(s.clone()))
                 };
                 view! {
-                    <button class="chip" class:selected=selected on:click=move |_| { picked_group.set(None); choice.set(Some(Choice::OnRoute(s2.clone()))); }>
+                    <button class="chip" class:selected=selected on:click=move |_| {
+                        picked_group.set(None);
+                        stop_text.set(String::new());
+                        choice.set(Some(Choice::OnRoute(s2.clone())));
+                    }>
                         {s.name.clone()}
                         {s.distance_m.map(|d| view! { <small>{format!(" · {d:.0} m")}</small> })}
                     </button>
@@ -151,33 +167,15 @@ pub fn Alight() -> impl IntoView {
                 <h3>"Na trase"</h3>
                 <div class="chips">{route_view}</div>
             </Show>
-            <Show
-                when=move || state.tt.get().index().is_some()
-                fallback=move || view! {
-                    <label>"Výstupní zastávka"
-                        <input type="text" placeholder="Název zastávky"
-                            prop:value=move || manual_stop.get()
-                            on:input=move |ev| { manual_stop.set(event_target_value(&ev)); choice.set(Some(Choice::Manual)); } />
-                    </label>
-                }
-            >
-                <h3>"Jiné zastávky v okolí"</h3>
-                <GroupPicker
-                    candidates=nearby
-                    selected=picked_group
-                    on_pick=Callback::new(move |g| {
-                        manual_stop.set(String::new());
-                        choice.set(Some(Choice::Group(g)));
-                    })
-                />
-                <input type="text" placeholder="Zastávka není v seznamu? Napište název"
-                    prop:value=move || manual_stop.get()
-                    on:input=move |ev| {
-                        manual_stop.set(event_target_value(&ev));
-                        picked_group.set(None);
-                        choice.set(Some(Choice::Manual));
-                    } />
-            </Show>
+            <h3>"Jiné zastávky"</h3>
+            <StopInput
+                text=stop_text
+                selected=picked_group
+                near=near
+                candidates=nearby
+                placeholder="Hledat zastávku nebo napsat název…"
+                on_pick=Callback::new(move |g| choice.set(Some(Choice::Group(g))))
+            />
             <div class="actions sticky">
                 <button class="primary huge" disabled=move || !can_finish() on:click=move |_| finish(false)>"Hotovo"</button>
                 <button class="secondary big" disabled=move || !can_finish() on:click=move |_| finish(true)>"Přestoupit"</button>

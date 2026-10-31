@@ -8,6 +8,7 @@ use pid_core::timetable::query::DepartureSource;
 
 use crate::components::{RouteBadge, ride_color};
 use crate::state::{AppState, Screen};
+use crate::stop_input::StopInput;
 use crate::util::{duration_label, local, now_fixed};
 
 const INPUT_FMT: &str = "%Y-%m-%dT%H:%M";
@@ -42,12 +43,12 @@ pub fn Edit(id: String) -> impl IntoView {
     let alight_time = RwSignal::new(ride.alight_time.as_ref().map(to_input).unwrap_or_default());
     let error = RwSignal::new(None::<String>);
     let confirm_delete = RwSignal::new(false);
-    let stop_query = RwSignal::new(String::new());
-
-    let stop_suggestions = move || {
-        let q = stop_query.get();
-        state.tt.get().index().map(|ix| ix.search_groups(&q, 8)).unwrap_or_default()
-    };
+    let board_sel = RwSignal::new(None::<u32>);
+    let alight_sel = RwSignal::new(None::<u32>);
+    let board_pos = ride.board_lat.zip(ride.board_lon);
+    let alight_pos = ride.alight_lat.zip(ride.alight_lon);
+    let board_near = Signal::derive(move || board_pos.or_else(|| state.last_pos()));
+    let alight_near = Signal::derive(move || alight_pos.or(board_pos).or_else(|| state.last_pos()));
     let route_suggestions = move || {
         let q = line.get();
         state.tt.get().index().map(|ix| ix.search_routes(&q, 6)).unwrap_or_default()
@@ -87,13 +88,23 @@ pub fn Edit(id: String) -> impl IntoView {
                 })
                 .unwrap_or_default()
         };
+        let group_stop = |g: u32| {
+            ix.as_ref().map(|ix| (ix.tt.stops[ix.group_first_stop(g) as usize].gtfs_id.clone(), ix.tt.group_name(g).to_string()))
+        };
+        // Vybraná zastávka z návrhů, jinak ruční text (stop_id jen při přesné shodě názvu).
         let bs = board_stop.get_untracked().trim().to_string();
-        if bs != r.board_stop_name {
+        if let Some((id, name)) = board_sel.get_untracked().and_then(group_stop) {
+            r.board_stop_id = id;
+            r.board_stop_name = name;
+        } else if bs != r.board_stop_name {
             r.board_stop_id = stop_id_for(&bs);
             r.board_stop_name = bs;
         }
         let als = alight_stop.get_untracked().trim().to_string();
-        if Some(&als) != r.alight_stop_name.as_ref() {
+        if let Some((id, name)) = alight_sel.get_untracked().and_then(group_stop) {
+            r.alight_stop_id = Some(id);
+            r.alight_stop_name = Some(name);
+        } else if Some(&als) != r.alight_stop_name.as_ref() {
             r.alight_stop_id = (!als.is_empty()).then(|| stop_id_for(&als));
             r.alight_stop_name = (!als.is_empty()).then_some(als);
         }
@@ -155,11 +166,6 @@ pub fn Edit(id: String) -> impl IntoView {
     view! {
         <section class="edit">
             <h2>"Úprava jízdy"</h2>
-            <datalist id="stop-suggestions">
-                <For each=stop_suggestions key=|g| g.group let:g>
-                    <option value=g.name.clone()></option>
-                </For>
-            </datalist>
             <datalist id="line-suggestions">
                 <For each=route_suggestions key=|r| r.0.clone() let:r>
                     <option value=r.1.clone()>{RouteKind::from_gtfs(r.2).label_cs()}</option>
@@ -187,18 +193,14 @@ pub fn Edit(id: String) -> impl IntoView {
                 <input type="text" prop:value=move || operator.get()
                     on:input=move |ev| operator.set(event_target_value(&ev)) />
             </label>
-            <label>"Nástup"
-                <input type="text" list="stop-suggestions" prop:value=move || board_stop.get()
-                    on:input=move |ev| { let v = event_target_value(&ev); stop_query.set(v.clone()); board_stop.set(v); } />
-            </label>
+            <label>"Nástup"</label>
+            <StopInput text=board_stop selected=board_sel near=board_near placeholder="Nástupní zastávka" />
             <label>"Čas nástupu"
                 <input type="datetime-local" prop:value=move || board_time.get()
                     on:input=move |ev| board_time.set(event_target_value(&ev)) />
             </label>
-            <label>"Výstup"
-                <input type="text" list="stop-suggestions" prop:value=move || alight_stop.get()
-                    on:input=move |ev| { let v = event_target_value(&ev); stop_query.set(v.clone()); alight_stop.set(v); } />
-            </label>
+            <label>"Výstup"</label>
+            <StopInput text=alight_stop selected=alight_sel near=alight_near placeholder="Výstupní zastávka" />
             <label>"Čas výstupu"
                 <input type="datetime-local" prop:value=move || alight_time.get()
                     on:input=move |ev| alight_time.set(event_target_value(&ev)) />

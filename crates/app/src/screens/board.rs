@@ -27,56 +27,6 @@ const AFTER_MIN: i64 = 30;
 const TICK_MS: u32 = 30_000;
 const DELAYS_REFRESH_MS: u32 = 60_000;
 
-/// Výběr zastávky: kandidáti z okolí, nebo výsledky vyhledávání.
-#[component]
-pub fn GroupPicker(
-    candidates: Signal<Vec<NearbyGroup>>,
-    selected: RwSignal<Option<u32>>,
-    #[prop(optional)] on_pick: Option<Callback<u32>>,
-) -> impl IntoView {
-    let state = expect_context::<AppState>();
-    let query = RwSignal::new(String::new());
-    let shown = move || {
-        let q = query.get();
-        if q.trim().is_empty() {
-            candidates.get()
-        } else {
-            state.tt.get().index().map(|ix| ix.search_groups(&q, 8)).unwrap_or_default()
-        }
-    };
-    view! {
-        <div class="picker">
-            <input
-                type="search"
-                placeholder="Hledat zastávku…"
-                prop:value=move || query.get()
-                on:input=move |ev| query.set(event_target_value(&ev))
-            />
-            <div class="chips">
-                <For each=shown key=|g| g.group let:g>
-                    {
-                        let id = g.group;
-                        view! {
-                            <button
-                                class="chip"
-                                class:selected=move || selected.get() == Some(id)
-                                on:click=move |_| {
-                                    selected.set(Some(id));
-                                    query.set(String::new());
-                                    if let Some(cb) = on_pick { cb.run(id); }
-                                }
-                            >
-                                {g.name.clone()}
-                                {(g.distance_m > 0.0).then(|| view! { <small>{format!(" · {:.0} m", g.distance_m)}</small> })}
-                            </button>
-                        }
-                    }
-                </For>
-            </div>
-        </div>
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 enum LineChoice {
     /// Nejbližší nadcházející spoj (výchozí).
