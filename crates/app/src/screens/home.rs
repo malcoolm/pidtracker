@@ -1,11 +1,12 @@
-//! Úvodní obrazovka: nová jízda, nebo probíhající jízda s tlačítkem Výstup.
+//! Úvodní obrazovka: vyhledání spojení a nová jízda, nebo probíhající jízda s tlačítkem Výstup.
 
 use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::ride::{Ride, on_vehicle_changed};
 
-use crate::components::{DataBanner, RideRow, RouteBadge, ride_color};
+use crate::components::{DataBanner, RouteBadge, ride_color};
+use crate::screens::Search;
 use crate::state::{AppState, Screen};
 use crate::util::{hhmm, now_fixed};
 
@@ -23,27 +24,34 @@ pub fn Home() -> impl IntoView {
 
 #[component]
 fn Idle() -> impl IntoView {
-    let state = expect_context::<AppState>();
-    let recent = move || {
-        // Jen jízdy přihlášeného uživatele; jízdy ostatních jsou v Historii.
-        let me = state.me.get().unwrap_or_default();
-        let mut rides: Vec<Ride> = state.rides.get().into_iter().filter(|r| !r.deleted && r.can_edit(&me)).collect();
-        rides.sort_by_key(|r| std::cmp::Reverse(r.board_time));
-        rides.truncate(3);
-        rides
-    };
     view! {
         <section class="home">
-            <button class="fab" on:click=move |_| state.screen.set(Screen::Board { group: None })>"＋ Nová jízda"</button>
-            <Show when=move || !recent().is_empty()>
-                <h3>"Poslední jízdy"</h3>
-                <div class="list">
-                    <For each=recent key=|r| (r.id.clone(), r.updated_at) let:ride>
-                        <RideRow ride=ride />
-                    </For>
-                </div>
+            <Search />
+            <NewRideFab />
+        </section>
+    }
+}
+
+/// Obrazovka Spojení z menu: během probíhající jízdy bez tlačítka Nová jízda.
+#[component]
+pub fn SearchScreen() -> impl IntoView {
+    let state = expect_context::<AppState>();
+    view! {
+        <DataBanner />
+        <section class="home">
+            <Search />
+            <Show when=move || state.current_ride().is_none()>
+                <NewRideFab />
             </Show>
         </section>
+    }
+}
+
+#[component]
+fn NewRideFab() -> impl IntoView {
+    let state = expect_context::<AppState>();
+    view! {
+        <button class="fab" on:click=move |_| state.screen.set(Screen::Board { group: None })>"＋ Nová jízda"</button>
     }
 }
 

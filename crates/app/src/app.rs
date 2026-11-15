@@ -6,7 +6,7 @@ use leptos::task::spawn_local;
 use crate::components::Toast;
 use crate::config::{APP_VERSION, BUILD_ID};
 use crate::halloween::{HalloweenDeco, apply_season};
-use crate::screens::{AlertsScreen, Alight, Board, Edit, History, Home, Onboarding, Settings, Stats};
+use crate::screens::{AlertsScreen, Alight, Board, Edit, History, Home, Onboarding, SearchScreen, Settings, Stats};
 use crate::state::{AppState, Screen, TtState};
 use crate::topbar::TopBar;
 use crate::{storage, sync, timetable_loader, update};
@@ -49,6 +49,7 @@ pub fn App() -> impl IntoView {
             <main class="app">
                 {move || match state.screen.get() {
                     Screen::Home => view! { <Home /> }.into_any(),
+                    Screen::Search => view! { <SearchScreen /> }.into_any(),
                     Screen::Board { group } => view! { <Board group=group /> }.into_any(),
                     Screen::Alight => view! { <Alight /> }.into_any(),
                     Screen::History => view! { <History /> }.into_any(),

@@ -35,6 +35,8 @@ pub fn Menu() -> impl IntoView {
             let s = state.screen.get();
             std::mem::discriminant(&s) == std::mem::discriminant(&t)
                 || (matches!(t, Screen::Home) && matches!(s, Screen::Board { .. } | Screen::Alight))
+                // Bez jízdy ukazuje úvodní obrazovka vyhledávání.
+                || (matches!(t, Screen::Search) && matches!(s, Screen::Home) && state.current_ride().is_none())
                 || (matches!(t, Screen::History) && matches!(s, Screen::Edit(_)))
         };
         let is_alerts = matches!(target, Screen::Alerts { .. });
@@ -62,7 +64,10 @@ pub fn Menu() -> impl IntoView {
                     <div class="menu-user">"Přihlášen: " {move || state.me.get().map(|e| state.nickname(&e)).unwrap_or_default()}</div>
                     <SyncBadge />
                 </div>
-                {item("Jízda", Screen::Home)}
+                <Show when=move || state.current_ride().is_some()>
+                    <div class="menu-ride">{item("Probíhající jízda", Screen::Home)}</div>
+                </Show>
+                {item("Spojení", Screen::Search)}
                 {item("Historie", Screen::History)}
                 {item("Statistiky", Screen::Stats)}
                 {item("Mimořádnosti", Screen::Alerts { open: None })}

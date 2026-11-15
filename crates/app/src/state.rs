@@ -32,6 +32,8 @@ impl TtState {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Screen {
     Home,
+    /// Vyhledání spojení (bez probíhající jízdy je i obsahem úvodní obrazovky).
+    Search,
     /// Výběr zastávky a linky. `group` je předvybraná skupina (přestup).
     Board { group: Option<u32> },
     Alight,
