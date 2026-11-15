@@ -15,7 +15,7 @@ export function getPosition(timeoutMs) {
 }
 
 // Promise se vytváří synchronně, aby requestAccessToken běžel v rámci uživatelského gesta.
-export function gisRequestToken(clientId, scope, hint) {
+export function gisRequestToken(clientId, scope, hint, silent) {
   return new Promise((resolve, reject) => {
     const oauth2 = window.google && window.google.accounts && window.google.accounts.oauth2;
     if (!oauth2) { reject('Google přihlášení se ještě nenačetlo, zkuste to za chvíli.'); return; }
@@ -27,6 +27,7 @@ export function gisRequestToken(clientId, scope, hint) {
     });
     const opts = {};
     if (hint) { opts.login_hint = hint; opts.hint = hint; }
+    if (silent) opts.prompt = '';
     client.requestAccessToken(opts);
   });
 }
@@ -67,6 +68,15 @@ export function sessionSet(key, value) {
   try { sessionStorage.setItem(key, value); } catch (_) {}
 }
 
+// Klepnutí kdekoli (capture), mimo textová pole; `cb` běží synchronně, aby šlo otevřít popup v rámci gesta.
+export function onUserTap(cb) {
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest('input, textarea, select')) return;
+    cb();
+  }, true);
+}
+
 export function onOnline(cb) {
   window.addEventListener('online', () => cb());
 }
@@ -76,7 +86,7 @@ extern "C" {
     async fn get_position_js(timeout_ms: u32) -> Result<JsValue, JsValue>;
 
     #[wasm_bindgen(js_name = gisRequestToken)]
-    pub fn gis_request_token(client_id: &str, scope: &str, hint: &str) -> js_sys::Promise;
+    pub fn gis_request_token(client_id: &str, scope: &str, hint: &str, silent: bool) -> js_sys::Promise;
 
     #[wasm_bindgen(js_name = gisRevoke)]
     pub fn gis_revoke(token: &str);
@@ -98,6 +108,9 @@ extern "C" {
 
     #[wasm_bindgen(js_name = sessionSet)]
     pub fn session_set(key: &str, value: &str);
+
+    #[wasm_bindgen(js_name = onUserTap)]
+    fn on_user_tap_js(cb: &Closure<dyn FnMut()>);
 
     #[wasm_bindgen(js_name = onOnline)]
     fn on_online_js(cb: &Closure<dyn FnMut()>);
@@ -160,5 +173,12 @@ pub fn on_visible(f: impl FnMut() + 'static) {
 pub fn on_online(f: impl FnMut() + 'static) {
     let cb = Closure::<dyn FnMut()>::new(f);
     on_online_js(&cb);
+    cb.forget();
+}
+
+/// Zavolá `f` synchronně při každém klepnutí mimo textová pole (fáze capture).
+pub fn on_user_tap(f: impl FnMut() + 'static) {
+    let cb = Closure::<dyn FnMut()>::new(f);
+    on_user_tap_js(&cb);
     cb.forget();
 }

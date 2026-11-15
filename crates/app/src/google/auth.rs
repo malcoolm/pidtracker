@@ -38,10 +38,20 @@ pub fn current_token() -> Option<Token> {
     ls_get::<Token>(keys::TOKEN).filter(|t| t.expires_at_ms - EXPIRY_MARGIN_MS > js_sys::Date::now())
 }
 
+/// Vypršení uloženého tokenu, i prošlého (`None`, když token chybí).
+pub fn token_expires_at_ms() -> Option<f64> {
+    ls_get::<Token>(keys::TOKEN).map(|t| t.expires_at_ms)
+}
+
 /// Spustí přihlášení. Musí se volat přímo z obsluhy kliknutí: popup se otevře synchronně
 /// a teprve vrácená future čeká na výsledek.
 pub fn sign_in(login_hint: Option<&str>) -> impl Future<Output = Result<Token, AuthError>> + 'static {
-    let promise = GOOGLE_CLIENT_ID.map(|id| gis_request_token(id, SCOPE, login_hint.unwrap_or("")));
+    sign_in_with(login_hint, false)
+}
+
+/// Jako `sign_in`; při `silent` Google nezobrazí výběr účtu (tiché obnovení, popup se sám zavře).
+pub fn sign_in_with(login_hint: Option<&str>, silent: bool) -> impl Future<Output = Result<Token, AuthError>> + 'static {
+    let promise = GOOGLE_CLIENT_ID.map(|id| gis_request_token(id, SCOPE, login_hint.unwrap_or(""), silent));
     async move {
         let promise = promise.ok_or(AuthError::NoClientId)?;
         let started = js_sys::Date::now();

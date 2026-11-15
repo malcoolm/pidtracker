@@ -3,6 +3,7 @@
 pub mod alerts;
 pub mod geo;
 pub mod realtime;
+pub mod reauth;
 pub mod ride;
 pub mod season;
 pub mod sheet;

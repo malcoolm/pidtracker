@@ -6,6 +6,7 @@ mod google;
 mod halloween;
 mod interop;
 mod realtime;
+mod reauth;
 mod screens;
 mod state;
 mod stop_input;

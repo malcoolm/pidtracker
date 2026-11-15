@@ -32,6 +32,7 @@ pub fn App() -> impl IntoView {
     });
     update::install(state);
     crate::alerts::install(state);
+    crate::reauth::install(state);
 
     // Sezónní vzhled podle data; přepočet při návratu do popředí (např. 5. 11. ráno).
     let halloween = RwSignal::new(apply_season());
