@@ -117,6 +117,7 @@ pub fn RideRow(ride: Ride) -> impl IntoView {
         "" => ride.vehicle.clone(),
         plate => format!("{} · {plate}", ride.vehicle),
     });
+    let has_note = !ride.note.trim().is_empty();
     view! {
         <button class="ride-row" on:click=move |_| state.screen.set(Screen::Edit(id.clone()))>
             <RouteBadge name=ride.route_short_name.clone() color=color />
@@ -127,6 +128,7 @@ pub fn RideRow(ride: Ride) -> impl IntoView {
                     {duration.map(|d| format!(" · {d}"))}
                     {vehicle.map(|v| format!(" · vůz {v}"))}
                     {who.map(|w| format!(" · {w}"))}
+                    {has_note.then(|| " · 📝")}
                     {unfinished.then(|| view! { <span class="tag">"neukončeno"</span> })}
                 </span>
             </span>

@@ -169,7 +169,7 @@ button:disabled { opacity: .45; cursor: default; }
 .row .link { width: auto; }
 
 /* Formuláře */
-input, select {
+input, select, textarea {
   font: inherit;
   color: var(--fg);
   background: var(--surface);
@@ -179,9 +179,11 @@ input, select {
   width: 100%;
   min-height: 46px;
 }
-input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 label { display: block; margin: 12px 0; color: var(--muted); font-size: 14px; }
-label input, label select { margin-top: 4px; font-size: 17px; }
+label input, label select, label textarea { margin-top: 4px; font-size: 17px; }
+textarea { resize: vertical; min-height: 80px; }
+.note-text { white-space: pre-wrap; }
 
 /* Štítek linky */
 .badge {

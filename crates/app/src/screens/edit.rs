@@ -38,6 +38,7 @@ pub fn Edit(id: String) -> impl IntoView {
     let line = RwSignal::new(ride.route_short_name.clone());
     let vehicle = RwSignal::new(ride.vehicle.clone());
     let plate = RwSignal::new(ride.license_plate.clone());
+    let note = RwSignal::new(ride.note.clone());
     let operator = RwSignal::new(ride.operator.clone());
     let kind = RwSignal::new(ride.route_type);
     let board_time = RwSignal::new(to_input(&ride.board_time));
@@ -141,6 +142,7 @@ pub fn Edit(id: String) -> impl IntoView {
             state.rides.with_untracked(|all| on_vehicle_changed(&mut r, all));
         }
         r.operator = operator.get_untracked().trim().to_string();
+        r.note = note.get_untracked().trim().to_string();
         r.alight_time = at;
         if at.is_some() {
             r.status = RideStatus::Done;
@@ -222,6 +224,10 @@ pub fn Edit(id: String) -> impl IntoView {
             <Show when=move || in_progress>
                 <button class="secondary" on:click=move |_| alight_time.set(to_input(&now_fixed()))>"Ukončit teď"</button>
             </Show>
+            <label>"Poznámka"
+                <textarea rows="3" prop:value=move || note.get()
+                    on:input=move |ev| note.set(event_target_value(&ev))></textarea>
+            </label>
             {move || error.get().map(|e| view! { <p class="error">{e}</p> })}
             <div class="actions">
                 <button class="primary big" on:click=save>"Uložit"</button>
@@ -251,6 +257,7 @@ fn ReadOnly(ride: Ride) -> impl IntoView {
             {(!ride.vehicle.is_empty()).then(|| view! { <p>"Vůz: " {ride.vehicle.clone()}</p> })}
             {(!ride.license_plate.is_empty()).then(|| view! { <p>"SPZ: " {ride.license_plate.clone()}</p> })}
             {(!ride.operator.is_empty()).then(|| view! { <p>"Dopravce: " {ride.operator.clone()}</p> })}
+            {(!ride.note.trim().is_empty()).then(|| view! { <p class="note-text">"Poznámka: " {ride.note.clone()}</p> })}
             <p class="muted">"Jízdy jiných osob nelze upravovat."</p>
             <button class="link" on:click=move |_| state.screen.set(Screen::History)>"Zpět"</button>
         </section>
