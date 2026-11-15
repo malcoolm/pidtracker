@@ -138,16 +138,31 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
 
 **Hledání z polohy (venku)**
 
-- [ ] Menu ☰ → **Spojení** otevře vyhledávání. Venku klepněte do pole „Odkud“ a vyberte
-      **📍 Moje poloha**, do pole „Kam“ napište cíl (např. „Letňany“) a vyberte ho z nabídky.
+- [ ] Menu ☰ → **Spojení** otevře vyhledávání. Pole „Odkud“ je předvyplněné **📍 Moje poloha**
+      (během zjišťování vedle něj „zjišťuji…“). Do pole „Kam“ napište cíl (např. „Letňany“)
+      a vyberte ho z nabídky.
 - [ ] Klepněte na **Hledat** a změřte čas do zobrazení výsledků: _____ ms (cíl pod 300 ms,
-      přijatelné do ~1 s). Seznam ukazuje odjezd → příjezd, dobu, přestupy a první řádek
-      „Vyrazte do N min“ nebo „Vyrazte hned“.
-- [ ] V detailu spojení je první řádek „📍 Moje poloha“ a pod ním „🚶 N min na zastávku <název>“.
+      přijatelné do ~1 s). Každá karta ukazuje čas odchodu → příjezd, dobu, přestupy,
+      chůzi („🚶N“), linky a řádek „<zastávka> odj. <čas>“.
+- [ ] V detailu spojení je pod časy řádek „Vyrazte do N min“ (nebo „Vyrazte hned“, u spojení
+      za víc než 90 min „Odchod v HH:MM“), první řádek osy „📍 Moje poloha“ a pod ním
+      „🚶 N min na zastávku <název>“.
+- [ ] Klepněte na **📍 Moje poloha**: rozbalí se blízké zastávky („<název> · 🚶N min“).
+      Vyberte jednu (ne nejbližší): pole ukáže „📍 Moje poloha → <název>“. Hledejte: karta
+      i detail začínají chůzí z polohy (detail: „📍 Moje poloha“, „🚶 N min na zastávku …“)
+      a všechna spojení odjíždějí z vybrané zastávky. „Všechny zastávky v okolí“ výběr zruší.
+- [ ] Nechte aplikaci na obrazovce hledání v pozadí, přejděte jinam (aspoň 2 min, ideálně
+      pár set metrů) a vraťte se: po chvíli „zjišťuji…“ se hledá z nové polohy (souhrn nad
+      výsledky i chůze odpovídá novému místu).
+- [ ] Zakažte aplikaci polohu (Nastavení → Soukromí → Polohové služby) a otevřete hledání:
+      pole „Odkud“ je výběr zastávky s hláškou a odkazem „📍 Zkusit znovu zjistit polohu“.
+      Polohu znovu povolte a klepněte na odkaz: pole se vrátí na „📍 Moje poloha“.
 
 **Hledání ze zvolené zastávky a příjezd**
 
-- [ ] Do „Odkud“ napište zastávku ručně (ne polohu) a vyberte ji. Najde se spojení do cíle.
+- [ ] Klepněte na **📍 Moje poloha** → „Jiná zastávka…“, do „Odkud“ napište zastávku (např.
+      „Anděl“) a vyberte ji. Najde se spojení do cíle. Karta začíná odjezdem prvního spoje:
+      „8:00 → 8:21“ a pod tím „Anděl odj. 8:00“ (čas vlevo = čas odjezdu, ne o rezervu dřív).
 - [ ] Přepněte na **Příjezd** (vedle „Odjezd“), v poli data a času zvolte čas (tlačítko „teď“ ho smaže) a hledejte: všechna spojení přijedou do zvoleného času
       nebo dřív.
 - [ ] Tlačítka „Dřívější spojení ↑“ (nad seznamem) a „Další spojení ↓“ (pod ním) doplní seznam a nic se neduplikuje.
@@ -156,14 +171,15 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
 
 - [ ] Na obrazovce hledání zaškrtněte u „Vyloučit:“ druh dopravy (např. autobus), hledejte: výsledky ho neobsahují.
       Zavřete a znovu otevřete aplikaci: vyloučení se pamatuje.
-- [ ] V Nastavení → „Vyhledávání spojení“ změňte „Rezerva před prvním nástupem“ (např. z 2 na 5 min): „Vyrazte do N min“ se zkrátí
-      o rozdíl.
+- [ ] V Nastavení → „Vyhledávání spojení“ změňte „Rezerva před prvním nástupem“ (např. z 2 na 5 min): „Vyrazte do N min“ v detailu
+      spojení se zkrátí o rozdíl.
 
 **Detail spojení**
 
 - [ ] Klepnutí na spojení otevře detail: časová osa s jízdami, zastávkami a nástupišti.
       Přestupní chůze je „přestup 🚶 N min“, poslední chůze k cíli „🚶 N min do cíle“
-      (bez „přestup“). Cílový řádek je „🏁 …“.
+      (bez „přestup“). Přestup na stejném nástupišti (bez chůze) je „přestup N min“ a osa
+      mezi jízdami nemá mezeru. Cílový řádek je „🏁 …“.
 - [ ] Ve špičce vyberte spoj se zpožděním: původní čas přeškrtnutý, vedle nový čas. Záhlaví
       ukazuje „Vyrazte hned“ nebo po odjezdu červené „Ujelo“. Zpoždění se mění za provozu.
       Není-li žádný spoj zpožděný, zapište „neověřeno“.
@@ -190,3 +206,14 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
       s tlačítkem **Výstup**, ne hledání.
 - [ ] V menu ☰ je nad „Spojení“ položka **Probíhající jízda**; klepnutí na ni vrátí na jízdu.
       Po Výstupu je úvodní obrazovkou zase hledání spojení.
+
+**Aktualizace z 0.5.0 během jízdy**
+
+- [ ] Ve verzi 0.5.0 spusťte jízdu a nechte ji běžet, zatímco se nasadí 0.6.0 (aplikaci
+      jen přepínejte do pozadí a zpět). Dokud se aplikace neobnoví, může se objevit pruh
+      „Jízdní řád je poškozený …“ (stará verze nezná nový formát) nebo „Jízdní řád je ve
+      starém formátu, stáhne se po připojení.“ – to je v pořádku. Výstup jde i tak zapsat
+      ručně: na obrazovce Výstup napište název zastávky do pole „Hledat zastávku nebo napsat
+      název…“ a klepněte na „Hotovo“.
+- [ ] Po Výstupu se aktualizace použije (hláška „Aktualizováno na verzi 0.6.0 …“), pruh
+      zmizí nejpozději po návratu do popředí nebo připojení k síti a hledání spojení funguje.
