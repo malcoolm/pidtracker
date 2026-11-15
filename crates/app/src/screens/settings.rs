@@ -77,6 +77,20 @@ pub fn Settings() -> impl IntoView {
                 <button class="secondary" on:click=save_nick>"Uložit"</button>
             </div>
 
+            <h3>"Vyhledávání spojení"</h3>
+            <label>
+                "Rezerva před prvním nástupem"
+                <select
+                    on:change=move |ev| {
+                        if let Ok(v) = event_target_value(&ev).parse::<u8>() {
+                            state.set_planner_buffer(v);
+                        }
+                    }
+                >
+                    {(0u8..=5).map(|m| view! { <option value=m.to_string() selected=move || state.planner_buffer_min.get() == m>{format!("{m} min")}</option> }).collect_view()}
+                </select>
+            </label>
+
             <h3>"Tabulka"</h3>
             <div class="row">
                 {move || sheet_url().map(|u| view! { <a href=u target="_blank" rel="noopener">"Otevřít v Google Sheets"</a> })}

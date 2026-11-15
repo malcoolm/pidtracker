@@ -6,7 +6,7 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::alerts::ServiceAlert;
-use pid_core::ride::{Ride, RideStatus};
+use pid_core::ride::{Ride, RideStatus, RouteKind};
 use pid_core::timetable::query::TimetableIndex;
 
 use crate::interop::Fix;
@@ -79,6 +79,10 @@ pub struct AppState {
     pub watched: Memo<HashSet<String>>,
     /// Počet aktivních relevantních mimořádností.
     pub alert_count: Memo<usize>,
+    /// Rezerva před prvním nástupem při vyhledávání spojení (0–5 min).
+    pub planner_buffer_min: RwSignal<u8>,
+    /// Druhy dopravy vyloučené z vyhledávání spojení.
+    pub planner_excluded: RwSignal<Vec<RouteKind>>,
 }
 
 impl AppState {
@@ -101,6 +105,8 @@ impl AppState {
             alert_banner: RwSignal::new(Vec::new()),
             watched: Memo::new(|_| HashSet::new()),
             alert_count: Memo::new(|_| 0usize),
+            planner_buffer_min: RwSignal::new(ls_get::<u8>(keys::PLANNER_BUFFER_MIN).unwrap_or(2).min(5)),
+            planner_excluded: RwSignal::new(ls_get(keys::PLANNER_EXCLUDED).unwrap_or_default()),
         };
         // Odvozené hodnoty potřebují hotový stav.
         s.watched = crate::alerts::make_watched(s);
@@ -156,6 +162,19 @@ impl AppState {
     /// Poslední známá poloha jako (lat, lon).
     pub fn last_pos(&self) -> Option<(f64, f64)> {
         self.last_fix.get().map(|f| (f.lat, f.lon))
+    }
+
+    /// Nastaví a uloží rezervu před prvním nástupem (ořezáno na 0–5 min).
+    pub fn set_planner_buffer(&self, min: u8) {
+        let min = min.min(5);
+        ls_set(keys::PLANNER_BUFFER_MIN, &min);
+        self.planner_buffer_min.set(min);
+    }
+
+    /// Nastaví a uloží vyloučené druhy dopravy pro vyhledávání spojení.
+    pub fn set_planner_excluded(&self, kinds: Vec<RouteKind>) {
+        ls_set(keys::PLANNER_EXCLUDED, &kinds);
+        self.planner_excluded.set(kinds);
     }
 
     pub fn show_toast(&self, msg: impl Into<String>) {

@@ -72,6 +72,8 @@ pub mod keys {
     pub const LAST_FIX: &str = "pt.last_fix";
     pub const ALERTS: &str = "pt.alerts";
     pub const ALERTS_SEEN: &str = "pt.alerts_seen";
+    pub const PLANNER_BUFFER_MIN: &str = "pt.planner_buffer_min";
+    pub const PLANNER_EXCLUDED: &str = "pt.planner_excluded";
 }
 
 /// Je aplikace na pozadí (zamčený telefon, jiná aplikace)?
