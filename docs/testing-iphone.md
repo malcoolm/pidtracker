@@ -72,3 +72,20 @@ přesměrováním.
 - [ ] U probíhající jízdy vyplňte **SPZ** → v Historii je „vůz 8758 · 1AB 2345“, ve Statistikách
       u vozu také. Další jízda stejným vozem má SPZ předvyplněnou.
 - [ ] V tabulce přibyl sloupec `license_plate` (AA).
+
+## Kontrolní bod G – verze 0.5.0
+
+- [ ] Nahoře je červený proužek ve stylu PID. Písmo Fira Sans vypadá stejně i po zapnutí
+      režimu Letadlo (žádné načítání písma z internetu). Tmavý režim se řídí systémem
+      (Nastavení iOS → Zobrazení a jas).
+- [ ] Menu ☰ se otevře a obsahuje i ikonku stavu (přihlášení / synchronizace).
+- [ ] Tlačítko (fab) je vlevo dole a poslední jízdu lze vysunout nad něj.
+- [ ] U zpožděného spoje je původní čas přeškrtnutý a vedle něj skutečný.
+- [ ] „›“ na konci řádku odjezdu otevře detail trasy se štítkem vozu.
+- [ ] V menu je **Mimořádnosti**. Při nové mimořádnosti na lince z historie se objeví
+      oranžový pruh „⚠ Nová mimořádnost“.
+- [ ] Poznámka zapsaná v **Úpravě jízdy** se objeví v tabulce ve sloupci `note` (AB).
+- [ ] Ve **Statistikách** ukazuje volba **Oba** jeden společný součet.
+- [ ] Po zhruba hodině klepněte na cokoli: přihlášení se tiše obnoví bez zadávání hesla.
+      Pokud popup Googlu v aplikaci na ploše zůstane prázdný nebo ho nejde zavřít, zapište to sem
+      a obnovu pro iOS standalone vypněte (viz spec 4.9).
