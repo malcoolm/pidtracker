@@ -15,6 +15,7 @@ use pid_core::timetable::query::{DelayKind, DepartureSource, NearbyGroup, Timeta
 use pid_core::timetable::router::{Access, Journey, JourneyQuery, Leg, TimeMode, labels};
 
 use crate::components::RouteBadge;
+use super::journey::JourneyDetail;
 use crate::interop::{Fix, GeoError, current_position};
 use crate::state::AppState;
 use crate::stop_input::StopInput;
@@ -121,7 +122,7 @@ fn merge(list: &mut Vec<Journey>, found: Vec<Journey>) -> usize {
     added
 }
 
-fn transfers_label(n: u8) -> String {
+pub(super) fn transfers_label(n: u8) -> String {
     match n {
         0 => "bez přestupu".into(),
         1 => "1 přestup".into(),
@@ -131,7 +132,7 @@ fn transfers_label(n: u8) -> String {
 }
 
 /// Minuty chůze zaokrouhlené nahoru.
-fn walk_min(seconds: u32) -> u32 {
+pub(super) fn walk_min(seconds: u32) -> u32 {
     seconds.div_ceil(60)
 }
 
@@ -139,9 +140,15 @@ fn hm(t: DateTime<Tz>) -> String {
     t.format("%H:%M").to_string()
 }
 
-/// Jedno nalezené spojení. Zatím se na něj neklepe (detail přidá Task 6).
+/// Jedno nalezené spojení; klepnutí otevře detail.
 #[component]
-fn JourneyCard(j: Journey, fastest: bool, fewest: bool, delays: RwSignal<Delays>) -> impl IntoView {
+fn JourneyCard(
+    j: Journey,
+    fastest: Signal<bool>,
+    fewest: Signal<bool>,
+    delays: RwSignal<Delays>,
+    on_open: Callback<Journey>,
+) -> impl IntoView {
     let state = expect_context::<AppState>();
     let ix = state.tt.get_untracked().index();
     // Doba podle zobrazených minut, aby „7:44 → 8:21“ bylo vždy „37 min“.
@@ -205,12 +212,26 @@ fn JourneyCard(j: Journey, fastest: bool, fewest: bool, delays: RwSignal<Delays>
         view! { <div class="jc-dep">{name}" odj. "{time}</div> }
     });
 
+    let opened = j.clone();
+    let open = move || on_open.run(opened.clone());
+    let open_key = open.clone();
     view! {
-        <div class="journey-card">
+        <div
+            class="journey-card"
+            role="button"
+            tabindex="0"
+            on:click=move |_| open()
+            on:keydown=move |ev| {
+                if ev.key() == "Enter" || ev.key() == " " {
+                    ev.prevent_default();
+                    open_key();
+                }
+            }
+        >
             <div class="jc-head">
                 <span class="jc-times">{format!("{} → {}", hm(j.leave), hm(j.arrive))}</span>
-                {fastest.then(|| view! { <span class="jc-label">"nejrychlejší"</span> })}
-                {fewest.then(|| view! { <span class="jc-label">"nejméně přestupů"</span> })}
+                {move || fastest.get().then(|| view! { <span class="jc-label">"nejrychlejší"</span> })}
+                {move || fewest.get().then(|| view! { <span class="jc-label">"nejméně přestupů"</span> })}
             </div>
             <div class="jc-meta">{meta}</div>
             <div class="jc-legs">{legs}</div>
@@ -246,7 +267,14 @@ pub fn Search() -> impl IntoView {
     // Režim posledního hledání (formulář se mezitím může přepnout).
     let shown_mode = RwSignal::new(TimeMode::DepartAt);
     let delays = RwSignal::new(Delays::default());
-    let lab = Memo::new(move |_| results.with(|r| labels(r)));
+    // Štítky podle klíče spojení (ne indexu), aby karty v klíčovaném seznamu zůstaly správné.
+    let lab = Memo::new(move |_| {
+        results.with(|r| {
+            let l = labels(r);
+            (l.fastest.map(|i| trip_key(&r[i])), l.fewest.map(|i| trip_key(&r[i])))
+        })
+    });
+    let selected = RwSignal::new(None::<Journey>);
 
     spawn_local(async move {
         match current_position().await {
@@ -356,7 +384,7 @@ pub fn Search() -> impl IntoView {
             Origin::Position => fix.get().is_some(),
             Origin::Stop => from_group.get().is_some(),
         };
-        state.tt.get().index().is_some() && to_group.get().is_some() && from_ok && !searching.get()
+        state.tt.get().index().is_some() && to_group.get().is_some() && from_ok && !searching.get() && !loading_more.get()
     };
 
     let search = {
@@ -389,7 +417,19 @@ pub fn Search() -> impl IntoView {
                 return;
             }
             let picked = picked_time(&time_text.get_untracked(), &ix);
-            let time = picked.unwrap_or_else(now);
+            let time = match picked {
+                Some(t) => t,
+                None => {
+                    // „Teď“ mimo platnost dat: jízdní řády tu nejsou.
+                    let n = now();
+                    let (min, max) = feed_bounds(ix.tt.feed_start, ix.tt.feed_end);
+                    if n.naive_local() < min || n.naive_local() > max {
+                        message.set(Some("Jízdní řády nejsou pro tento čas k dispozici.".into()));
+                        return;
+                    }
+                    n
+                }
+            };
             let m = mode.get_untracked();
             let mut excluded = state.planner_excluded.get_untracked();
             excluded.sort();
@@ -580,19 +620,22 @@ pub fn Search() -> impl IntoView {
             </Show>
             {more_block(true)}
             <div class="list">
-                {move || {
-                    let l = lab.get();
-                    results
-                        .get()
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, j)| view! {
-                            <JourneyCard j=j fastest=l.fastest == Some(i) fewest=l.fewest == Some(i) delays=delays />
-                        })
-                        .collect_view()
-                }}
+                <For each=move || results.get() key=trip_key let:j>
+                    {
+                        let k = trip_key(&j);
+                        let kf = k.clone();
+                        let fastest = Signal::derive(move || lab.with(|l| l.0.as_ref() == Some(&kf)));
+                        let fewest = Signal::derive(move || lab.with(|l| l.1.as_ref() == Some(&k)));
+                        let on_open = Callback::new(move |j: Journey| selected.set(Some(j)));
+                        view! { <JourneyCard j=j fastest=fastest fewest=fewest delays=delays on_open=on_open /> }
+                    }
+                </For>
             </div>
             {more_block(false)}
+            {move || selected.get().map(|j| {
+                let close = Callback::new(move |_| selected.set(None));
+                view! { <JourneyDetail j=j delays=delays on_close=close /> }
+            })}
         </section>
     }
 }

@@ -626,3 +626,29 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; padding
 .jc-dep .early, .jc-dep .ok { color: var(--ok-text); }
 .search-more { font-weight: 600; }
 .menu-ride .menu-item { color: var(--accent-text); font-weight: 700; box-shadow: inset 4px 0 0 var(--accent); }
+
+/* Detail spojení: svislá časová osa */
+.jd-meta { color: var(--muted); font-size: 14px; }
+.jd-go { margin: 4px 0 12px; font-size: 16px; font-weight: 700; color: var(--ok-text); }
+.jd-line { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px 10px; }
+.jd-row { display: grid; grid-template-columns: 48px 14px 1fr; column-gap: 8px; align-items: start; }
+.jd-time { text-align: right; padding-top: 6px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.jd-time small { display: block; font-size: 12px; font-weight: 600; }
+.jd-time .late { color: var(--warn-text); }
+.jd-time .early { color: var(--ok-text); }
+.jd-rail { position: relative; align-self: stretch; min-height: 34px; }
+.jd-rail .ln { position: absolute; left: 5px; top: 0; bottom: 0; width: 4px; border-radius: 2px; }
+.jd-rail .ln.walk { background: repeating-linear-gradient(var(--muted) 0 4px, transparent 4px 8px); opacity: .6; }
+.jd-rail .dot { position: absolute; left: 1px; top: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 3px solid var(--fg); box-sizing: border-box; }
+.jd-body { padding: 5px 0 6px; min-width: 0; }
+.jd-name { font-size: 15px; overflow-wrap: anywhere; }
+.jd-name .badge { display: inline-block; vertical-align: baseline; }
+.jd-sub { font-size: 13px; color: var(--muted); }
+.jd-exp { color: var(--accent-text); font-size: 14px; font-weight: 600; padding: 4px 0 8px; min-height: 36px; }
+.jd-row.exp .jd-rail { min-height: 0; }
+.jd-row.mid .jd-rail { min-height: 26px; }
+.jd-row.mid .jd-rail .dot { width: 8px; height: 8px; left: 3px; top: 9px; border-width: 2px; }
+.jd-row.mid .jd-time { font-size: 12px; padding-top: 5px; }
+.jd-row.mid .jd-body { font-size: 13px; color: var(--muted); padding: 3px 0; }
+.journey-card[role="button"] { cursor: pointer; }
+.jd-row.exp .jd-rail .dot { display: none; }

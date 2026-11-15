@@ -4,6 +4,7 @@ mod board;
 mod edit;
 mod history;
 mod home;
+mod journey;
 mod onboarding;
 mod search;
 mod settings;
