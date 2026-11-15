@@ -276,6 +276,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             vehicle: String::new(),
             operator: String::new(),
             license_plate: String::new(),
+            note: String::new(),
         };
         if let (Some(ix), Some(g)) = (&ix, group) {
             ride.board_stop_name = ix.tt.group_name(g).to_string();

@@ -125,6 +125,9 @@ pub struct Ride {
     /// SPZ vozu (jen ručně); prázdné = neznámá.
     #[serde(default)]
     pub license_plate: String,
+    /// Poznámka k jízdě (volný text); prázdná = žádná.
+    #[serde(default)]
+    pub note: String,
 }
 
 impl Ride {
@@ -210,6 +213,7 @@ pub(crate) mod tests {
             vehicle: "8758".into(),
             operator: "Dopravní podnik hl. m. Prahy, akciová společnost".into(),
             license_plate: String::new(),
+            note: String::new(),
         }
     }
 
@@ -321,5 +325,13 @@ mod vehicle_change_tests {
         let mut r = ride("2", "8758", "");
         on_vehicle_changed(&mut r, &all);
         assert_eq!(r.license_plate, "");
+    }
+
+    #[test]
+    fn json_without_note_deserializes_empty() {
+        let mut v = serde_json::to_value(sample_ride()).unwrap();
+        v.as_object_mut().unwrap().remove("note");
+        let r: Ride = serde_json::from_value(v).unwrap();
+        assert_eq!(r.note, "");
     }
 }

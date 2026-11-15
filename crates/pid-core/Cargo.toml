@@ -11,3 +11,6 @@ postcard.workspace = true
 flate2.workspace = true
 thiserror.workspace = true
 prost = "0.14"
+
+[dev-dependencies]
+serde_json.workspace = true

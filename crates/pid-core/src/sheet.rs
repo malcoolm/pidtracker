@@ -11,7 +11,7 @@ pub const PEOPLE_SHEET: &str = "people";
 pub const PEOPLE_HEADERS: [&str; 2] = ["email", "nickname"];
 
 /// Sloupce listu `rides`. Nové sloupce se smí přidávat jen na konec.
-pub const HEADERS: [&str; 27] = [
+pub const HEADERS: [&str; 28] = [
     "id",
     "person",
     "board_stop_id",
@@ -39,8 +39,9 @@ pub const HEADERS: [&str; 27] = [
     "vehicle",
     "operator",
     "license_plate",
+    "note",
 ];
-pub const LAST_COL: &str = "AA";
+pub const LAST_COL: &str = "AB";
 
 /// Kolik sloupců přidat do mřížky listu, aby se vešlo `needed` sloupců
 /// (nový list Google má jen 26, zápis za mřížku API odmítne).
@@ -125,6 +126,7 @@ pub fn to_row(r: &Ride) -> Vec<String> {
         r.vehicle.clone(),
         r.operator.clone(),
         r.license_plate.clone(),
+        r.note.clone(),
     ]
 }
 
@@ -205,6 +207,7 @@ pub fn from_row(headers: &[String], row: &[String]) -> Result<Ride, RowError> {
         vehicle: c.get("vehicle").to_string(),
         operator: c.get("operator").to_string(),
         license_plate: c.get("license_plate").to_string(),
+        note: c.get("note").to_string(),
     })
 }
 
@@ -295,8 +298,8 @@ mod row_tests {
 
     #[test]
     fn headers_len_matches_last_col() {
-        assert_eq!(HEADERS.len(), 27);
-        assert_eq!(LAST_COL, "AA");
+        assert_eq!(HEADERS.len(), 28);
+        assert_eq!(LAST_COL, "AB");
         assert_eq!(HEADERS[25], "operator");
         assert_eq!(HEADERS[24], "vehicle");
     }
@@ -445,8 +448,6 @@ mod plate_tests {
     #[test]
     fn plate_is_column_aa() {
         assert_eq!(HEADERS[26], "license_plate");
-        assert_eq!(LAST_COL, "AA");
-        assert_eq!(column_letter(HEADERS.len()), LAST_COL);
     }
 
     #[test]
@@ -467,6 +468,31 @@ mod plate_tests {
         assert_eq!(p.rides[0].1.license_plate, "");
         assert_eq!(p.rides[0].1.vehicle, "8758");
     }
+
+    #[test]
+    fn note_is_column_ab() {
+        assert_eq!(HEADERS[27], "note");
+        assert_eq!(LAST_COL, "AB");
+        assert_eq!(column_letter(HEADERS.len()), LAST_COL);
+    }
+
+    #[test]
+    fn note_round_trips() {
+        let mut r = sample_ride();
+        r.note = "plná tramvaj, klimatizace nejela".into();
+        let headers: Vec<String> = HEADERS.iter().map(|s| s.to_string()).collect();
+        assert_eq!(parse_rows(&[headers, to_row(&r)]).rides[0].1.note, "plná tramvaj, klimatizace nejela");
+    }
+
+    #[test]
+    fn old_row_without_note() {
+        let headers: Vec<String> = HEADERS[..27].iter().map(|s| s.to_string()).collect();
+        let mut row = to_row(&sample_ride());
+        row.truncate(27);
+        let p = parse_rows(&[headers, row]);
+        assert_eq!(p.rides[0].1.note, "");
+        assert_eq!(p.rides[0].1.license_plate, sample_ride().license_plate);
+    }
 }
 
 #[cfg(test)]
@@ -475,9 +501,10 @@ mod grid_tests {
 
     #[test]
     fn grid_needs_extra_column_for_plate() {
-        // Nový list Google má 26 sloupců (A–Z); license_plate je 27.
-        assert_eq!(columns_to_append(26, HEADERS.len()), 1);
-        assert_eq!(columns_to_append(27, HEADERS.len()), 0);
+        // Nový list Google má 26 sloupců (A–Z); license_plate je 27, note 28.
+        assert_eq!(columns_to_append(26, HEADERS.len()), 2);
+        assert_eq!(columns_to_append(27, HEADERS.len()), 1);
+        assert_eq!(columns_to_append(28, HEADERS.len()), 0);
         assert_eq!(columns_to_append(40, HEADERS.len()), 0);
     }
 }
