@@ -218,7 +218,13 @@ label input, label select { margin-top: 4px; font-size: 17px; }
 .ride-meta { color: var(--muted); font-size: 14px; }
 .dep-head { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dep-time { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dep-time small { display: block; color: var(--muted); font-size: 13px; }
+.dep-time b { font-weight: 700; }
+.dep-time small { display: block; font-size: 13px; color: var(--muted); }
+.dep-time .sched { color: var(--muted); font-size: 14px; }
+.dep-time .actual.late, .dep-time small.late { color: var(--danger); }
+.dep-time .actual.early, .dep-time small.early { color: var(--ok-text); }
+.dep-time small.ok { color: var(--ok-text); }
+.dep-time small.muted { color: var(--muted); }
 .tag {
   margin-left: 6px;
   font-size: 12px;
@@ -435,10 +441,6 @@ h3.day { text-transform: none; letter-spacing: 0; font-size: 15px; }
   padding: 24px 0 0;
 }
 
-/* Zpoždění na tabuli Nástupu */
-.delay { font-weight: 700; }
-.delay.late { color: var(--danger); }
-.delay.early { color: var(--ok-text); }
 
 /* Halloween (24. 10. – 4. 11.): třída na <html> přepíše barvy, dekorace jsou za obsahem. */
 html.halloween {
@@ -467,7 +469,7 @@ html.halloween h3 {
   color: #ffa040;
 }
 html.halloween h2::after { content: " 🎃"; }
-html.halloween .delay.late { color: #ffd166; }
+html.halloween .dep-time .actual.late, html.halloween .dep-time small.late { color: #ffd166; }
 html.halloween .app { position: relative; z-index: 1; }
 .hw-deco { position: fixed; inset: 0; pointer-events: none; z-index: 0; color: #55565c; }
 .hw-deco svg { position: absolute; }
@@ -478,3 +480,67 @@ html.halloween .app { position: relative; z-index: 1; }
 .hw-skel-1 { right: 10px; }
 .hw-skel-2 { right: 46px; transform: scaleX(-1); }
 .hw-eye { fill: var(--bg); }
+
+/* Řádek odjezdu s tlačítkem detailu */
+.dep-item { display: flex; align-items: stretch; gap: 4px; }
+.dep-item .dep-row { flex: 1; min-width: 0; width: auto; }
+.dep-more {
+  flex-shrink: 0;
+  width: 44px;
+  min-height: 54px;
+  font-size: 26px;
+  color: var(--accent-text);
+  background: var(--surface);
+  border-radius: 12px;
+}
+
+/* Detail spoje (celoobrazovkový panel pod horním proužkem, pod menu) */
+.trip-panel {
+  position: fixed;
+  top: calc(48px + env(safe-area-inset-top));
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 25;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+}
+.trip-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.trip-head .trip-title { flex: 1; min-width: 0; font-weight: 700; font-size: 18px; }
+.trip-head .link { width: auto; }
+.trip-line { border-left: 4px solid var(--line, var(--accent)); margin-left: 10px; padding-left: 14px; }
+.trip-stop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+.trip-stop::before {
+  content: "";
+  position: absolute;
+  left: -23px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--line, var(--accent));
+}
+.trip-stop .stop-name { flex: 1; min-width: 0; }
+.trip-stop.board { font-weight: 700; }
+.trip-stop.board::before { background: var(--line, var(--accent)); }
+.trip-stop .here { display: block; font-weight: 400; font-size: 13px; color: var(--accent-text); }
+.trip-stop.passed { opacity: .5; }
+.trip-more { display: block; width: 100%; text-align: left; color: var(--muted); padding: 10px 0; min-height: 44px; }
+.trip-vehicle {
+  display: inline-block;
+  margin: 4px 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-weight: 500;
+}

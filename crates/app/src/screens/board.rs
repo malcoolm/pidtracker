@@ -10,9 +10,10 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::realtime::Delays;
 use pid_core::ride::{Ride, RideStatus, RouteKind};
-use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows, pick_row, when_label};
+use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows, pick_row};
 
-use crate::components::{DataBanner, RouteBadge};
+use crate::components::{DataBanner, DepTime, RouteBadge};
+use crate::screens::TripDetail;
 use crate::config::BUILD_ID;
 use crate::interop::{Fix, current_position};
 use crate::state::{AppState, Screen};
@@ -43,40 +44,41 @@ fn row_key(r: &BoardRow) -> (u32, u32) {
     (r.dep.trip, r.dep.stop)
 }
 
-/// „+2 min“ / „−1 min“; zpoždění pod minutu se neukazuje.
-fn delay_label(delay_s: Option<i32>) -> Option<(String, &'static str)> {
-    let d = delay_s?;
-    if d.abs() < 60 {
-        return None;
-    }
-    let mins = (d as f64 / 60.0).round() as i64;
-    Some(if mins > 0 { (format!("+{mins} min"), "delay late") } else { (format!("−{} min", -mins), "delay early") })
-}
 
 #[component]
-fn DepRow(row: BoardRow, at: DateTime<Tz>, choice: RwSignal<LineChoice>, selected: Signal<Option<(u32, u32)>>) -> impl IntoView {
+fn DepRow(
+    row: BoardRow,
+    at: DateTime<Tz>,
+    choice: RwSignal<LineChoice>,
+    selected: Signal<Option<(u32, u32)>>,
+    detail: RwSignal<Option<BoardRow>>,
+) -> impl IntoView {
     let key = row_key(&row);
     let picked = row.clone();
-    let when = when_label(row.expected, at);
-    let delay = delay_label(row.delay_s);
+    let opened = row.clone();
     let d = row.dep;
     view! {
-        <button
-            class="dep-row"
-            class:selected=move || selected.get() == Some(key)
-            on:click=move |_| choice.set(LineChoice::Trip(picked.clone()))
-        >
-            <RouteBadge name=d.route_short_name.clone() color=d.color />
-            <span class="dep-head">{d.headsign.clone()}</span>
-            <span class="dep-time">
-                {d.time.format("%H:%M").to_string()}
-                " "
-                <small>
-                    {when}
-                    {delay.map(|(text, class)| view! { " · " <span class=class>{text}</span> })}
-                </small>
-            </span>
-        </button>
+        <div class="dep-item">
+            <button
+                class="dep-row"
+                class:selected=move || selected.get() == Some(key)
+                on:click=move |_| choice.set(LineChoice::Trip(picked.clone()))
+            >
+                <RouteBadge name=d.route_short_name.clone() color=d.color />
+                <span class="dep-head">{d.headsign.clone()}</span>
+                <DepTime scheduled=d.time delay_s=row.delay_s at=at />
+            </button>
+            <button
+                class="dep-more"
+                aria-label="Trasa spoje"
+                on:click=move |ev| {
+                    ev.stop_propagation();
+                    detail.set(Some(opened.clone()));
+                }
+            >
+                "›"
+            </button>
+        </div>
     }
 }
 
@@ -91,6 +93,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
     let at = RwSignal::new(now());
     let delays = RwSignal::new(Delays::default());
     let choice = RwSignal::new(LineChoice::Auto);
+    let detail = RwSignal::new(None::<BoardRow>);
     let show_recent = RwSignal::new(false);
     let manual_line = RwSignal::new(String::new());
     let manual_kind = RwSignal::new(None::<u16>);
@@ -355,7 +358,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
                         .get()
                         .into_iter()
                         .chain(rows.get().0)
-                        .map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key /> })
+                        .map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key detail=detail /> })
                         .collect_view()
                 }}
                 <Show when=move || rows.with(|(_, recent)| !recent.is_empty())>
@@ -365,7 +368,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
                     <Show when=move || show_recent.get()>
                         {move || {
                             let t = at.get();
-                            rows.get().1.into_iter().map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key /> }).collect_view()
+                            rows.get().1.into_iter().map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key detail=detail /> }).collect_view()
                         }}
                     </Show>
                 </Show>
@@ -402,6 +405,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             <div class="actions sticky">
                 <button class="primary huge" disabled=move || !can_start() on:click=start>"Start"</button>
             </div>
+        {move || detail.get().map(|row| view! { <TripDetail row=row delays=delays on_close=Callback::new(move |_| detail.set(None)) /> })}
         </section>
     }
 }

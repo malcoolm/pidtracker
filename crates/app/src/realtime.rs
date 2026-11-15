@@ -3,7 +3,7 @@
 use gloo_net::http::Request;
 use leptos::prelude::WithUntracked;
 use pid_core::ride::apply_known_plate;
-use pid_core::realtime::{Delays, TRIP_UPDATES_URL, VEHICLE_POSITIONS_URL, parse_trip_delays, vehicle_for_trip};
+use pid_core::realtime::{Delays, TRIP_UPDATES_URL, VEHICLE_POSITIONS_URL, VehicleFix, parse_trip_delays, vehicle_fix, vehicle_for_trip};
 
 use crate::state::AppState;
 use crate::util::now_fixed;
@@ -39,4 +39,14 @@ pub async fn fetch_delays() -> Option<Delays> {
     }
     let bytes = resp.binary().await.ok()?;
     Some(parse_trip_delays(&bytes))
+}
+
+/// Poloha vozu spoje z `vehicle_positions.pb`. Offline, chyba nebo spoj ve feedu není → `None`.
+pub async fn fetch_vehicle(trip_id: &str) -> Option<VehicleFix> {
+    let resp = Request::get(VEHICLE_POSITIONS_URL).send().await.ok()?;
+    if !resp.ok() {
+        return None;
+    }
+    let bytes = resp.binary().await.ok()?;
+    vehicle_fix(&bytes, trip_id)
 }

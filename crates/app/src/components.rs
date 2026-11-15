@@ -4,7 +4,9 @@ use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::ride::{Ride, RideStatus};
-use pid_core::timetable::query::{DataStatus, DepartureSource};
+use chrono::DateTime;
+use chrono_tz::Tz;
+use pid_core::timetable::query::{DataStatus, DelayKind, DepartureSource, time_display};
 
 use crate::google::auth::sign_in;
 use crate::state::{AppState, Screen, SyncStatus, TtState};
@@ -148,5 +150,27 @@ pub fn day_label(ride: &Ride) -> String {
         } else {
             format!("{wd} {}. {}. {}", d.day(), d.month(), d.year())
         }
+    }
+}
+
+/// Čas odjezdu: jízdní řád, při zpoždění/předčasu přeškrtnutý a nový čas, pod tím popisek.
+#[component]
+pub fn DepTime(scheduled: DateTime<Tz>, delay_s: Option<i32>, at: DateTime<Tz>) -> impl IntoView {
+    let t = time_display(scheduled, delay_s, at);
+    let (class, detail_class) = match t.kind {
+        DelayKind::Late => ("actual late", "late"),
+        DelayKind::Early => ("actual early", "early"),
+        DelayKind::OnTime => ("", "ok"),
+        DelayKind::Unknown => ("", "muted"),
+    };
+    let main = match t.actual {
+        Some(actual) => view! { <s class="sched">{t.scheduled}</s>" "<b class=class>{actual}</b> }.into_any(),
+        None => view! { <b>{t.scheduled}</b> }.into_any(),
+    };
+    view! {
+        <span class="dep-time">
+            {main}
+            <small class=detail_class>{t.detail}</small>
+        </span>
     }
 }

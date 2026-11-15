@@ -6,6 +6,7 @@ mod home;
 mod onboarding;
 mod settings;
 mod stats;
+mod trip;
 
 pub use alight::Alight;
 pub use board::Board;
@@ -15,3 +16,4 @@ pub use home::Home;
 pub use onboarding::Onboarding;
 pub use settings::Settings;
 pub use stats::Stats;
+pub use trip::TripDetail;
