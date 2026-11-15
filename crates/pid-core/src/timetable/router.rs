@@ -129,8 +129,9 @@ impl TimetableIndex {
                 found.iter().map(|j| j.arrive).max().map(|t| t - Duration::seconds(PLAN_STEP_S))
             };
             let Some(next) = next else { break };
-            for j in found {
-                merge_journey(&mut out, self.tighten(j, q.buffer_s));
+            let found: Vec<Journey> = found.into_iter().map(|j| self.tighten(j, q.buffer_s)).collect();
+            for j in drop_far_off(found, fwd) {
+                merge_journey(&mut out, j);
             }
             drop_dominated(&mut out);
             if out.len() >= min_count {
@@ -282,6 +283,26 @@ const PLAN_MAX_RUNS: usize = 8;
 const PLAN_MAX_RESULTS: usize = 5;
 /// Posun času dalšího běhu za předchozí výsledek.
 const PLAN_STEP_S: i64 = 60;
+/// Nejmenší tolerance pro Pareto kandidáty jednoho běhu (viz `drop_far_off`).
+pub const PARETO_SLACK_MIN_S: i64 = 30 * 60;
+
+/// Z kandidátů jednoho běhu vyřadí ty příliš vzdálené od nejlepšího (např. přímý noční
+/// spoj o hodiny dřív jen proto, že má méně přestupů). Odjezd: nejlepší = nejdřívější
+/// příjezd `a*` s dobou `d*`, vyřadí se příjezd po `a* + max(30 min, d*)`. Příjezd do:
+/// nejlepší = nejpozdější odchod `l*`, vyřadí se odchod před `l* − max(30 min, d*)`.
+/// Při shodě je nejlepší to kratší.
+fn drop_far_off(js: Vec<Journey>, fwd: bool) -> Vec<Journey> {
+    let duration = |j: &Journey| (j.arrive - j.leave).num_seconds();
+    let best = if fwd {
+        js.iter().min_by_key(|j| (j.arrive, duration(j)))
+    } else {
+        js.iter().min_by_key(|j| (std::cmp::Reverse(j.leave), duration(j)))
+    };
+    let Some(best) = best else { return js };
+    let slack = Duration::seconds(PARETO_SLACK_MIN_S.max(duration(best)));
+    let (arrive_max, leave_min) = (best.arrive + slack, best.leave - slack);
+    js.into_iter().filter(|j| if fwd { j.arrive <= arrive_max } else { j.leave >= leave_min }).collect()
+}
 
 fn trip_seq(j: &Journey) -> impl Iterator<Item = u32> + '_ {
     j.legs.iter().filter_map(|l| match *l {
@@ -1095,6 +1116,32 @@ mod tests {
         assert!(js.windows(2).all(|w| w[0].leave <= w[1].leave));
         assert!(js.iter().all(|j| j.arrive <= t(8, 45)));
         // Nejpozdější odchod: tram 8:00 → metro 8:10 (příjezd 8:20) i přímý tram 8:00 (8:40).
+        assert_eq!(js.last().unwrap().leave, t(8, 0));
+    }
+
+    #[test]
+    fn plan_drops_far_off_pareto() {
+        // Přímá tramvaj trvá 2 h (T1 až za 7200 s), s přestupem na metro je to 20–40 min.
+        let slow = |trams: &[u32]| {
+            let mut tt = timetable();
+            tt.profiles[0].offsets = vec![0, 300, 7200];
+            tt.trips = trams.iter().map(|&s| trip(0, s)).chain([8, 10, 20, 30].map(|m| trip(1, hm(8, m)))).collect();
+            TimetableIndex::new(tt)
+        };
+        // Odjezd: nejlepší příjezd 8:20 (20 min) → přímá s příjezdem 10:00 je za 8:50 a zmizí.
+        let ix = slow(&[hm(8, 0)]);
+        assert_eq!(ix.plan_once(&query(t(7, 55))).len(), 2);
+        let js = ix.plan(&query(t(7, 55)), 3);
+        assert!(!js.is_empty());
+        assert!(js.iter().all(|j| j.transfers == 1 && j.arrive <= t(8, 50)), "{js:#?}");
+        // Příjezd do 8:45: nejpozdější odchod 8:00 (40 min) → přímá z 6:40 je před 7:20 a zmizí.
+        let ix = slow(&[hm(6, 40), hm(7, 40), hm(7, 50), hm(8, 0)]);
+        let mut q = query(t(8, 45));
+        q.mode = TimeMode::ArriveBy;
+        assert!(ix.plan_once(&q).iter().any(|j| j.leave == t(6, 40)));
+        let js = ix.plan(&q, 3);
+        assert!(!js.is_empty());
+        assert!(js.iter().all(|j| j.leave >= t(7, 20)), "{js:#?}");
         assert_eq!(js.last().unwrap().leave, t(8, 0));
     }
 
