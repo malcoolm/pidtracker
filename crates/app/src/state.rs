@@ -1,10 +1,11 @@
 //! Globální stav aplikace sdílený přes Leptos context.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use pid_core::alerts::ServiceAlert;
 use pid_core::ride::{Ride, RideStatus};
 use pid_core::timetable::query::TimetableIndex;
 
@@ -68,13 +69,21 @@ pub struct AppState {
     pub foreground: RwSignal<u32>,
     /// Menu (hamburger) je otevřené.
     pub menu_open: RwSignal<bool>,
-    /// Počet aktivních mimořádností. Zatím zástupná hodnota, Task 10 nahradí.
+    /// Mimořádnosti z posledního feedu (nebo uložené z minula).
+    pub alerts: RwSignal<Vec<ServiceAlert>>,
+    /// Feed už byl někdy získán (jinak „offline“ místo „žádné mimořádnosti“).
+    pub alerts_known: RwSignal<bool>,
+    /// Id nových mimořádností pro pruh pod proužkem.
+    pub alert_banner: RwSignal<Vec<String>>,
+    /// Linky, na kterých jezdím (30 dní).
+    pub watched: Memo<HashSet<String>>,
+    /// Počet aktivních relevantních mimořádností.
     pub alert_count: Memo<usize>,
 }
 
 impl AppState {
     pub fn new() -> Self {
-        AppState {
+        let mut s = AppState {
             tt: RwSignal::new(TtState::Loading),
             rides: RwSignal::new(Vec::new()),
             me: RwSignal::new(ls_get_str(keys::ME)),
@@ -87,8 +96,16 @@ impl AppState {
             last_fix: RwSignal::new(ls_get(keys::LAST_FIX)),
             foreground: RwSignal::new(0),
             menu_open: RwSignal::new(false),
-            alert_count: Memo::new(move |_| 0usize),
-        }
+            alerts: RwSignal::new(crate::alerts::dedupe(ls_get(keys::ALERTS).unwrap_or_default())),
+            alerts_known: RwSignal::new(ls_get_str(keys::ALERTS).is_some()),
+            alert_banner: RwSignal::new(Vec::new()),
+            watched: Memo::new(|_| HashSet::new()),
+            alert_count: Memo::new(|_| 0usize),
+        };
+        // Odvozené hodnoty potřebují hotový stav.
+        s.watched = crate::alerts::make_watched(s);
+        s.alert_count = crate::alerts::make_count(s);
+        s
     }
 
     pub fn ride(&self, id: &str) -> Option<Ride> {

@@ -70,6 +70,8 @@ pub mod keys {
     pub const LAST_SEEN_BUILD: &str = "pt.last_seen_build";
     pub const LAST_SYNC: &str = "pt.last_sync";
     pub const LAST_FIX: &str = "pt.last_fix";
+    pub const ALERTS: &str = "pt.alerts";
+    pub const ALERTS_SEEN: &str = "pt.alerts_seen";
 }
 
 /// Je aplikace na pozadí (zamčený telefon, jiná aplikace)?

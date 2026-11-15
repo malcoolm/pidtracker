@@ -546,3 +546,39 @@ html.halloween .app { position: relative; z-index: 1; }
   color: var(--warn-text);
   font-weight: 500;
 }
+
+/* Mimořádnosti */
+.alert-banner {
+  position: sticky;
+  top: calc(48px + env(safe-area-inset-top));
+  z-index: 44;
+  display: flex;
+  align-items: center;
+  background: var(--warn);
+  color: #252525;
+}
+.alert-banner-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px 10px calc(12px + env(safe-area-inset-left));
+  text-align: left;
+  font-weight: 600;
+  color: inherit;
+}
+.alert-banner-main .badge { height: 22px; min-width: 30px; font-size: 13px; padding: 0 5px; }
+.alert-banner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alert-banner-close { width: 44px; min-height: 44px; font-size: 18px; color: inherit; flex-shrink: 0; }
+.alert-item { background: var(--surface); border-radius: 12px; border-left: 6px solid transparent; }
+.alert-item.relevant { border-left-color: var(--warn); background: var(--warn-bg); }
+.alert-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; padding: 10px 12px; text-align: left; color: var(--fg); }
+.alert-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.alert-badges .badge { height: 24px; min-width: 32px; font-size: 14px; padding: 0 6px; }
+.alert-title { font-weight: 600; }
+.alert-planned { font-size: 14px; color: var(--warn-text); }
+.alert-body { padding: 0 12px 12px; }
+.alert-body p { white-space: pre-line; }
+.dep-warn, .trip-warn { color: var(--warn-text); font-size: 22px; flex-shrink: 0; width: 40px; min-height: 44px; background: var(--surface); border-radius: 12px; }
+.trip-warn { background: none; width: 36px; }

@@ -1,3 +1,4 @@
+mod alerts;
 mod alight;
 mod board;
 mod edit;
@@ -8,6 +9,7 @@ mod settings;
 mod stats;
 mod trip;
 
+pub use alerts::AlertsScreen;
 pub use alight::Alight;
 pub use board::Board;
 pub use edit::Edit;

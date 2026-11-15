@@ -6,11 +6,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use pid_core::alerts::ServiceAlert;
 use pid_core::realtime::{Delays, VehicleFix, VehiclePlace, place_vehicle};
 use pid_core::timetable::query::{BoardRow, TripRoute};
 
 use crate::components::{DepTime, RouteBadge};
-use crate::state::AppState;
+use crate::state::{AppState, Screen};
 use crate::util::{css_color, now, page_hidden};
 
 const VEHICLE_REFRESH_MS: u32 = 60_000;
@@ -45,9 +46,14 @@ fn more_text(count: usize) -> String {
     }
 }
 
-/// Detail spoje. Pozdější úkol sem přidá volitelný `#[prop(optional)] alert`.
+/// Detail spoje. `alert` je aktivní mimořádnost linky (⚠ v hlavičce).
 #[component]
-pub fn TripDetail(row: BoardRow, delays: RwSignal<Delays>, on_close: Callback<()>) -> impl IntoView {
+pub fn TripDetail(
+    row: BoardRow,
+    delays: RwSignal<Delays>,
+    on_close: Callback<()>,
+    #[prop(optional)] alert: Option<ServiceAlert>,
+) -> impl IntoView {
     let state = expect_context::<AppState>();
     let route: TripRoute =
         state.tt.get_untracked().index().map(|ix| ix.trip_route(&row.dep)).unwrap_or(TripRoute { stops: Vec::new(), board: None });
@@ -186,6 +192,12 @@ pub fn TripDetail(row: BoardRow, delays: RwSignal<Delays>, on_close: Callback<()
             <div class="trip-head">
                 <RouteBadge name=row.dep.route_short_name.clone() color=row.dep.color />
                 <span class="trip-title">"→ " {row.dep.headsign.clone()}</span>
+                {alert.map(|a| {
+                    let id = a.id;
+                    view! {
+                        <button class="trip-warn" aria-label="Mimořádnost na lince" on:click=move |_| state.screen.set(Screen::Alerts { open: Some(id.clone()) })>"⚠"</button>
+                    }
+                })}
                 <button class="link" on:click=move |_| on_close.run(())>"Zpět"</button>
             </div>
             <div class="trip-line">{body}</div>

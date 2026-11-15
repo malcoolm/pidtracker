@@ -56,6 +56,8 @@ fn DepRow(
     let key = row_key(&row);
     let picked = row.clone();
     let opened = row.clone();
+    let state = expect_context::<AppState>();
+    let route_id = row.dep.route_id.clone();
     let d = row.dep;
     view! {
         <div class="dep-item">
@@ -68,6 +70,23 @@ fn DepRow(
                 <span class="dep-head">{d.headsign.clone()}</span>
                 <DepTime scheduled=d.time delay_s=row.delay_s at=at />
             </button>
+            {move || {
+                crate::alerts::route_alert(state, &route_id).map(|a| {
+                    let id = a.id;
+                    view! {
+                        <button
+                            class="dep-warn"
+                            aria-label="Mimořádnost na lince"
+                            on:click=move |ev| {
+                                ev.stop_propagation();
+                                state.screen.set(Screen::Alerts { open: Some(id.clone()) });
+                            }
+                        >
+                            "⚠"
+                        </button>
+                    }
+                })
+            }}
             <button
                 class="dep-more"
                 aria-label="Trasa spoje"
@@ -405,7 +424,13 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             <div class="actions sticky">
                 <button class="primary huge" disabled=move || !can_start() on:click=start>"Start"</button>
             </div>
-        {move || detail.get().map(|row| view! { <TripDetail row=row delays=delays on_close=Callback::new(move |_| detail.set(None)) /> })}
+        {move || detail.get().map(|row| {
+            let close = Callback::new(move |_| detail.set(None));
+            match crate::alerts::route_alert(state, &row.dep.route_id) {
+                Some(a) => view! { <TripDetail alert=a row=row delays=delays on_close=close /> }.into_any(),
+                None => view! { <TripDetail row=row delays=delays on_close=close /> }.into_any(),
+            }
+        })}
         </section>
     }
 }
