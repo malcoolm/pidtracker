@@ -128,7 +128,7 @@ pub fn RideRow(ride: Ride) -> impl IntoView {
                     {duration.map(|d| format!(" · {d}"))}
                     {vehicle.map(|v| format!(" · vůz {v}"))}
                     {who.map(|w| format!(" · {w}"))}
-                    {has_note.then(|| " · 📝")}
+                    {has_note.then_some(" · 📝")}
                     {unfinished.then(|| view! { <span class="tag">"neukončeno"</span> })}
                 </span>
             </span>
