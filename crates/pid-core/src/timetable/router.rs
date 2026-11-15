@@ -118,6 +118,9 @@ impl TimetableIndex {
 /// Počet kol RAPTORu (jízd) = přestupy + 1.
 const ROUNDS: usize = MAX_TRANSFERS as usize + 1;
 const INF: i64 = i64::MAX;
+/// Nejdelší doba mezi časem dotazu a příjezdem (odjezd) / odchodem (příjezd do).
+/// Spojení ze včerejška nebo na zítřek nedávají smysl.
+pub const SEARCH_HORIZON_S: i64 = 12 * 3600;
 
 /// Začátek nebo konec běhu na stanovišti: cena navíc a chůze, která k němu patří.
 #[derive(Clone, Copy, Debug)]
@@ -185,6 +188,7 @@ struct Raptor<'a> {
     best_ready: Vec<i64>,
     ride_back: Vec<Vec<Option<RideBack>>>,
     ready_back: Vec<Vec<Option<ReadyBack>>>,
+    /// Nejlepší cena cíle zatím; na začátku mez horizontu.
     best_sink: i64,
     /// `found[k]`: cíl běhu (index do `sinks`) s nejlepší cenou po k jízdách,
     /// jen pokud zlepšuje výsledek s méně jízdami.
@@ -217,6 +221,9 @@ impl<'a> Raptor<'a> {
     }
 
     fn run(&mut self, start: i64) {
+        // Horizont: cena cíle (příjezd, resp. −odchod) nejvýš start + horizont. Ceny podél
+        // spojení jen rostou, takže mez zároveň ořezává štítky už během kol.
+        self.best_sink = start + SEARCH_HORIZON_S + 1;
         let mut marked = Vec::new();
         for i in 0..self.sources.len() {
             let src = self.sources[i];
@@ -660,17 +667,18 @@ mod tests {
 
     #[test]
     fn buffer_blocks_tight_first_boarding() {
-        // Služba jen v den dotazu, aby se nenabídl zítřejší ranní spoj.
-        let mut tt = timetable();
-        let day = (t(0, 0).date_naive() - feed_start()).num_days() as usize;
-        tt.services[0].days.iter_mut().for_each(|b| *b = 0);
-        tt.services[0].days[day / 8] |= 1 << (day % 8);
-        let ix = TimetableIndex::new(tt);
+        let ix = net();
         let mut q = query(t(7, 59));
         q.buffer_s = 120;
         assert!(ix.plan_once(&q).is_empty());
         q.buffer_s = 0;
         assert!(!ix.plan_once(&q).is_empty());
+    }
+
+    #[test]
+    fn horizon_excludes_next_day() {
+        // Po poslední tramvaji; zítřejší ranní spoj je za horizontem.
+        assert!(net().plan_once(&query(t(8, 45))).is_empty());
     }
 
     #[test]
@@ -689,11 +697,8 @@ mod tests {
         let mut q = query(t(8, 35));
         q.mode = TimeMode::ArriveBy;
         let js = net().plan_once(&q);
-        // Přímá tramvaj dnes přijede až 8:40; bez přestupu jen včerejší (okno D−1..D+1).
-        assert_eq!(js.len(), 2);
-        let yesterday = |h, m| TZ.with_ymd_and_hms(2026, 11, 15, h, m, 0).unwrap();
-        assert_eq!((js[0].transfers, js[0].arrive), (0, yesterday(8, 40)));
-        let j = &js[1];
+        assert_eq!(js.len(), 1);
+        let j = &js[0];
         assert_eq!((j.leave, j.arrive, j.transfers), (t(8, 0), t(8, 30), 1));
         assert_eq!(rides(j), vec![(S1, H1, t(8, 0), t(8, 5)), (H2, T2, t(8, 20), t(8, 30))]);
         assert_eq!(j.legs[1], Leg::Walk { from: Some(H1), to: H2, seconds: 240 });
