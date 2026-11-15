@@ -7,9 +7,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use pid_core::geo::haversine_m;
 use pid_core::timetable::codec::encode;
+use pid_core::timetable::walk;
 use pid_core::timetable::{
-    NO_DROP_OFF, NO_PICKUP, Pattern, Profile, Route, Service, Stop, StopGroup, Timetable, Trip,
+    Footpath, NO_DROP_OFF, NO_PICKUP, Pattern, Profile, Route, Service, Stop, StopGroup, Timetable, Trip,
 };
 
 pub const PID_GTFS_URL: &str = "https://data.pid.cz/PID_GTFS.zip";
@@ -363,6 +365,8 @@ pub fn build_timetable(gtfs_dir: &Path, generated_at: DateTime<Utc>) -> Result<T
     }
     trips.sort_by_key(|t| (t.profile, t.start));
 
+    let footpaths = build_footpaths(&stops);
+
     Ok(Timetable {
         version: format!("{}-{}", feed_start.format("%Y%m%d"), generated_at.format("%Y%m%d%H%M")),
         feed_start,
@@ -375,7 +379,43 @@ pub fn build_timetable(gtfs_dir: &Path, generated_at: DateTime<Utc>) -> Result<T
         profiles,
         trips,
         services,
+        footpaths,
     })
+}
+
+/// Předpočítané pěší přestupy mezi stanovišti různých uzlů do `FOOTPATH_MAX_M`.
+/// Mřížka buněk místo O(n²): porovnávají se jen sousední buňky.
+fn build_footpaths(stops: &[Stop]) -> Vec<Vec<Footpath>> {
+    const CELL_LAT_E6: i32 = 5_000;
+    const CELL_LON_E6: i32 = 8_000;
+    let cell = |s: &Stop| (s.lat_e6.div_euclid(CELL_LAT_E6), s.lon_e6.div_euclid(CELL_LON_E6));
+    let mut grid: HashMap<(i32, i32), Vec<u32>> = HashMap::new();
+    for (i, s) in stops.iter().enumerate() {
+        grid.entry(cell(s)).or_default().push(i as u32);
+    }
+    let deg = |e6: i32| f64::from(e6) / 1e6;
+    let mut out = vec![Vec::new(); stops.len()];
+    for (i, a) in stops.iter().enumerate() {
+        let (cy, cx) = cell(a);
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let Some(near) = grid.get(&(cy + dy, cx + dx)) else { continue };
+                for &j in near {
+                    let b = &stops[j as usize];
+                    if a.group == b.group {
+                        continue;
+                    }
+                    let d = haversine_m(deg(a.lat_e6), deg(a.lon_e6), deg(b.lat_e6), deg(b.lon_e6));
+                    if d <= walk::FOOTPATH_MAX_M {
+                        let walk_s = walk::walk_seconds(d).min(u32::from(u16::MAX)) as u16;
+                        out[i].push(Footpath { to: j, walk_s });
+                    }
+                }
+            }
+        }
+        out[i].sort_by_key(|f| f.to);
+    }
+    out
 }
 
 pub struct OutputInfo {

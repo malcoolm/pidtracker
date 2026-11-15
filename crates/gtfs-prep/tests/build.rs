@@ -100,3 +100,32 @@ fn trip_operator_from_sub_agency() {
     assert_eq!(op("T22b").as_deref(), Some("Dopravní podnik hl. m. Prahy, akciová společnost"));
     assert_eq!(op("T22c").as_deref(), Some("Testovací dopravce s.r.o."));
 }
+
+#[test]
+fn footpaths_between_nearby_nodes() {
+    let t = build();
+    let idx = |id: &str| t.stops.iter().position(|s| s.gtfs_id == id).unwrap() as u32;
+    let (mir_b, masaryka, ruska) = (idx("U1Z2P"), idx("U2Z1P"), idx("U3Z1P"));
+    let fp = |from: u32, to: u32| t.footpaths[from as usize].iter().find(|f| f.to == to).copied();
+
+    let there = fp(mir_b, masaryka).expect("Náměstí Míru B -> Jana Masaryka");
+    assert!((340..=380).contains(&there.walk_s), "walk_s = {}", there.walk_s);
+    let back = fp(masaryka, mir_b).expect("Jana Masaryka -> Náměstí Míru B");
+    assert!((340..=380).contains(&back.walk_s), "walk_s = {}", back.walk_s);
+
+    assert!(fp(mir_b, ruska).is_none());
+    assert!(fp(ruska, mir_b).is_none());
+    // uvnitř uzlu Náměstí Míru žádné footpaths
+    let group = t.stops[mir_b as usize].group;
+    for &s in &t.groups[group as usize].stops {
+        for f in &t.footpaths[s as usize] {
+            assert_ne!(t.stops[f.to as usize].group, group);
+        }
+    }
+}
+
+#[test]
+fn decode_rejects_old_format() {
+    let err = decode(b"PIDT2\x00\x00").unwrap_err();
+    assert!(matches!(err, pid_core::timetable::codec::CodecError::BadMagic));
+}

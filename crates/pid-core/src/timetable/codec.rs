@@ -8,7 +8,7 @@ use flate2::write::DeflateEncoder;
 
 use super::Timetable;
 
-const MAGIC: &[u8] = b"PIDT2";
+const MAGIC: &[u8] = b"PIDT3";
 
 #[derive(Debug, thiserror::Error)]
 pub enum CodecError {

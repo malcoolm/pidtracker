@@ -2,6 +2,7 @@
 
 pub mod codec;
 pub mod query;
+pub mod walk;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,8 @@ pub struct Timetable {
     pub profiles: Vec<Profile>,
     pub trips: Vec<Trip>,
     pub services: Vec<Service>,
+    /// Pěší přestupy mezi stanovišti různých uzlů (index = stanoviště).
+    pub footpaths: Vec<Vec<Footpath>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -36,6 +39,13 @@ pub struct Stop {
     pub lat_e6: i32,
     pub lon_e6: i32,
     pub group: u32,
+}
+
+/// Pěší spojení na stanoviště jiného uzlu (chůze bez minima přestupu).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Footpath {
+    pub to: u32,
+    pub walk_s: u16,
 }
 
 /// Skupina stanovišť stejného uzlu (asw_node_id, jinak stejný název).
