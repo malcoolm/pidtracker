@@ -250,6 +250,55 @@ pub fn when_label(expected: DateTime<Tz>, now: DateTime<Tz>) -> String {
     }
 }
 
+/// Druh zpoždění pro zobrazení času.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DelayKind {
+    Unknown,
+    OnTime,
+    Late,
+    Early,
+}
+
+/// Čas odjezdu pro UI: jízdní řád, skutečný čas (jen při zpoždění/předčasu) a popisek.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TimeDisplay {
+    pub scheduled: String,
+    pub actual: Option<String>,
+    pub kind: DelayKind,
+    pub detail: String,
+}
+
+/// Sestaví zobrazení času: „14:20“, případně „14:22“ a „+2 min · za 5 min“.
+pub fn time_display(scheduled: DateTime<Tz>, delay_s: Option<i32>, now: DateTime<Tz>) -> TimeDisplay {
+    let hm = |d: DateTime<Tz>| d.format("%H:%M").to_string();
+    let Some(delay) = delay_s else {
+        return TimeDisplay {
+            scheduled: hm(scheduled),
+            actual: None,
+            kind: DelayKind::Unknown,
+            detail: when_label(scheduled, now),
+        };
+    };
+    let countdown = when_label(scheduled + Duration::seconds(delay as i64), now);
+    if delay.abs() < 60 {
+        return TimeDisplay {
+            scheduled: hm(scheduled),
+            actual: None,
+            kind: DelayKind::OnTime,
+            detail: format!("včas · {countdown}"),
+        };
+    }
+    // Minuty zpoždění zaokrouhlené; skutečný čas z nich, aby „14:20 +2 → 14:22“ vždy sedělo.
+    let mins = (delay as f64 / 60.0).round() as i64;
+    let (kind, sign) = if mins >= 0 { (DelayKind::Late, '+') } else { (DelayKind::Early, '−') };
+    TimeDisplay {
+        scheduled: hm(scheduled),
+        actual: Some(hm(scheduled + Duration::minutes(mins))),
+        kind,
+        detail: format!("{sign}{} min · {countdown}", mins.abs()),
+    }
+}
+
 fn next_rows_per_direction(rows: Vec<BoardRow>) -> Vec<BoardRow> {
     let mut seen = std::collections::HashSet::new();
     rows.into_iter().filter(|r| seen.insert((r.dep.route_id.clone(), r.dep.headsign.clone()))).collect()
@@ -446,5 +495,39 @@ mod when_tests {
         assert_eq!(when_label(t(21, 0, 40), now), "teď");
         assert_eq!(when_label(t(20, 59, 30), now), "teď");
         assert_eq!(when_label(t(20, 57, 0), now), "před 3 min");
+    }
+
+    fn t16(h: u32, m: u32) -> DateTime<Tz> {
+        TZ.with_ymd_and_hms(2026, 11, 16, h, m, 0).unwrap()
+    }
+
+    #[test]
+    fn time_display_late_ontime_unknown_early() {
+        let now = t16(14, 17);
+        assert_eq!(
+            time_display(t16(14, 20), Some(120), now),
+            TimeDisplay {
+                scheduled: "14:20".into(),
+                actual: Some("14:22".into()),
+                kind: DelayKind::Late,
+                detail: "+2 min · za 5 min".into()
+            }
+        );
+        assert_eq!(time_display(t16(14, 24), Some(20), now).detail, "včas · za 7 min");
+        assert_eq!(time_display(t16(14, 24), Some(20), now).actual, None);
+        let u = time_display(t16(14, 24), None, now);
+        assert_eq!((u.kind, u.detail.as_str(), u.actual), (DelayKind::Unknown, "za 7 min", None));
+        let e = time_display(t16(14, 20), Some(-70), now);
+        assert_eq!(
+            (e.kind, e.actual.as_deref(), e.detail.as_str()),
+            (DelayKind::Early, Some("14:19"), "−1 min · za 1 min")
+        );
+    }
+
+    #[test]
+    fn delay_across_midnight() {
+        let d = time_display(t16(23, 58), Some(300), t16(23, 55));
+        assert_eq!(d.actual.as_deref(), Some("00:03"));
+        assert_eq!(d.detail, "+5 min · za 8 min");
     }
 }
