@@ -1,7 +1,7 @@
 //! Statistiky: období (týden/měsíc/rok/celkem), osoby, počty, čas, typy dopravy, linky.
 
 use leptos::prelude::*;
-use pid_core::stats::{Period, PeriodKind, PersonStats, StatsQuery, compute};
+use pid_core::stats::{Period, PeriodKind, PersonStats, StatsQuery, compute, compute_combined};
 
 use crate::state::AppState;
 use crate::util::{css_color, duration_label, kind_color, now};
@@ -39,8 +39,15 @@ pub fn Stats() -> impl IntoView {
                 v
             }
         };
-        state.rides.with(|rs| compute(rs, &StatsQuery { period: period.get(), persons }))
+        let q = StatsQuery { period: period.get(), persons };
+        // „Oba“ = jeden souhrnný blok, ostatní volby jedna osoba
+        if who.get() == Who::Both {
+            vec![state.rides.with(|rs| compute_combined(rs, &q))]
+        } else {
+            state.rides.with(|rs| compute(rs, &q))
+        }
     });
+    let both = move || who.get() == Who::Both;
     let set_kind = move |k: PeriodKind| period.set(Period::containing(k, now().date_naive()));
 
     view! {
@@ -77,7 +84,11 @@ pub fn Stats() -> impl IntoView {
             </div>
             <div class="stats-grid">
                 <For each=move || result.get() key=|p| (p.person.clone(), p.rides, p.minutes, p.series.len()) let:ps>
-                    <PersonCard stats=ps />
+                    {if both() {
+                        view! { <PersonCard stats=ps title="Oba".to_string() /> }.into_any()
+                    } else {
+                        view! { <PersonCard stats=ps /> }.into_any()
+                    }}
                 </For>
             </div>
         </section>
@@ -85,10 +96,10 @@ pub fn Stats() -> impl IntoView {
 }
 
 #[component]
-fn PersonCard(stats: PersonStats) -> impl IntoView {
+fn PersonCard(stats: PersonStats, #[prop(optional)] title: Option<String>) -> impl IntoView {
     let state = expect_context::<AppState>();
     let is_me = state.me.get_untracked().is_some_and(|m| m.eq_ignore_ascii_case(&stats.person));
-    let name = if is_me { "Já".to_string() } else { state.nickname(&stats.person) };
+    let name = title.unwrap_or_else(|| if is_me { "Já".to_string() } else { state.nickname(&stats.person) });
     let max_kind = stats.by_kind.iter().map(|k| k.1).max().unwrap_or(1).max(1);
     view! {
         <article class="card">
