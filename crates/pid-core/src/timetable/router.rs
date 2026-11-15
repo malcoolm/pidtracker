@@ -3,7 +3,7 @@
 use chrono::{DateTime, Duration, NaiveDate};
 use chrono_tz::Tz;
 
-use super::query::TimetableIndex;
+use super::query::{TimetableIndex, TripStop};
 use super::walk::{ACCESS_MAX_M, MAX_TRANSFERS, METRO_ACCESS_EXTRA_S, transfer_seconds, walk_seconds};
 use super::{NO_DROP_OFF, NO_PICKUP};
 use crate::ride::RouteKind;
@@ -58,6 +58,39 @@ pub struct Journey {
 }
 
 impl TimetableIndex {
+    /// Zastávky jízdy od nástupu po výstup včetně, s časy ve dni služby jízdy
+    /// (odvozeném z `dep`). Pro `Walk` prázdné.
+    pub fn leg_stops(&self, leg: &Leg) -> Vec<TripStop> {
+        let Leg::Ride { trip, board_pos, alight_pos, dep, .. } = *leg else {
+            return Vec::new();
+        };
+        let trip = &self.tt.trips[trip as usize];
+        let profile = &self.tt.profiles[trip.profile as usize];
+        let pattern = &self.tt.patterns[profile.pattern as usize];
+        let (from, to) = (board_pos as usize, alight_pos as usize);
+        let day = dep.date_naive();
+        let Some(service_date) = [day - Duration::days(1), day, day + Duration::days(1)]
+            .into_iter()
+            .find(|&d| gtfs_instant(d, trip.start + profile.offsets[from]) == dep)
+        else {
+            return Vec::new();
+        };
+        (from..=to)
+            .map(|pos| {
+                let stop = pattern.stops[pos];
+                let s = &self.tt.stops[stop as usize];
+                TripStop {
+                    stop,
+                    gtfs_id: s.gtfs_id.clone(),
+                    name: self.tt.stop_name(stop).to_string(),
+                    lat: s.lat_e6 as f64 / 1e6,
+                    lon: s.lon_e6 as f64 / 1e6,
+                    time: gtfs_instant(service_date, trip.start + profile.offsets[pos]),
+                }
+            })
+            .collect()
+    }
+
     /// Jedno hledání: Pareto množina spojení (nejlepší čas pro každý počet přestupů
     /// 0..=`MAX_TRANSFERS`, jen zlepšující se), seřazená podle počtu přestupů.
     pub fn plan_once(&self, q: &JourneyQuery) -> Vec<Journey> {
@@ -912,6 +945,24 @@ mod tests {
                 Leg::Walk { .. } => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn leg_stops_returns_ride_segment() {
+        let ix = net();
+        let js = ix.plan_once(&query(t(7, 55)));
+        let direct = js.iter().find(|j| j.transfers == 0).unwrap();
+        let ride = direct.legs.iter().find(|l| matches!(l, Leg::Ride { .. })).unwrap();
+        let stops = ix.leg_stops(ride);
+        assert_eq!(stops.iter().map(|s| s.stop).collect::<Vec<_>>(), vec![S1, H1, T1]);
+        assert_eq!(stops.iter().map(|s| s.time).collect::<Vec<_>>(), vec![t(8, 0), t(8, 5), t(8, 40)]);
+        // Úsek uprostřed: jen H1 → T1.
+        let fast = js.iter().find(|j| j.transfers == 1).unwrap();
+        let second = fast.legs.iter().filter(|l| matches!(l, Leg::Ride { .. })).nth(1).unwrap();
+        let seg = ix.leg_stops(second);
+        assert_eq!(seg.iter().map(|s| s.stop).collect::<Vec<_>>(), vec![H2, T2]);
+        assert_eq!(seg[0].time, t(8, 10));
+        assert!(ix.leg_stops(&fast.legs[1]).is_empty());
     }
 
     #[test]
