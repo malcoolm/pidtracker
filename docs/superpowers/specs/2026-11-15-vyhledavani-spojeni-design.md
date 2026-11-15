@@ -1,7 +1,7 @@
 # PID Tracker – vyhledávání spojení
 
 Datum: 2026-11-15
-Stav: návrh ke schválení
+Stav: schváleno uživatelem 2026-11-15
 Navazuje na: `2026-11-15-vzhled-pid-trasa-mimoradnosti-design.md` (verze 0.5.0)
 Náhledy z brainstormingu: `.superpowers/brainstorm/1635-1794774817/content/` (`results-list.html`, `connection-detail.html`). Složka není v gitu.
 
@@ -133,7 +133,12 @@ Použije se stávající stahování `trip_updates.pb` (jako v Nástupu) pro spo
 - Data platí ~14 dní; vybraný čas mimo `feed_start..feed_end` se nepovolí.
 - Žádný vlastní server.
 
-## 6. Co zůstává na implementaci
+## 6. Nápady na příště (mimo tento návrh)
+
+- **Cíl jako adresa, offline (preferovaná varianta uživatele).** Přibalit adresní místa z RÚIAN (ČÚZK, otevřená data) pro Prahu a okolí (~100–200 tis. adres, odhad 2–4 MB komprimovaně), sestavovat je podobně jako jízdní řád (nástroj ve stylu `gtfs-prep`), stahovat jednou a cachovat. Našeptávání adresy offline, nic se neodesílá ven. Router: chůze do cíle zrcadlově k chůzi z polohy (zastávky v okruhu cílového bodu s časem chůze, minimalizuje se příjezd + chůze). Zvažované alternativy: online geokodér (Mapy.cz API / Nominatim / Photon – vyžaduje signál, posílá cíl třetí straně) a uložená místa („Domů“, „Škola“ – levné, ale neumí neznámou adresu).
+- Založení jízdy z nalezeného spojení (viz 3).
+
+## 7. Co zůstává na implementaci
 
 - Přesné rozmístění a styl prvků formuláře, sbalení formuláře po hledání.
 - Struktura modulu (`pid-core::timetable::router` apod.) a testy (malý ručně sestavený `Timetable` + kontrola na reálných datech).
