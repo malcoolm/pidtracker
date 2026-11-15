@@ -1,5 +1,6 @@
 //! Čistá logika PID Trackeru: jízdní řád, jízdy, synchronizace, statistiky.
 
+pub mod alerts;
 pub mod geo;
 pub mod realtime;
 pub mod ride;

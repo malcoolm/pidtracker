@@ -10,6 +10,8 @@ use prost::Message;
 pub const VEHICLE_POSITIONS_URL: &str = "https://api.golemio.cz/v2/vehiclepositions/gtfsrt/vehicle_positions.pb";
 /// Zpoždění jedoucích spojů (~1,3 MB, bez komprese) – stahovat střídmě.
 pub const TRIP_UPDATES_URL: &str = "https://api.golemio.cz/v2/vehiclepositions/gtfsrt/trip_updates.pb";
+/// Mimořádnosti (GTFS-RT Alerts).
+pub const ALERTS_URL: &str = "https://api.golemio.cz/v2/vehiclepositions/gtfsrt/alerts.pb";
 
 #[derive(Clone, PartialEq, Message)]
 pub struct FeedMessage {
@@ -25,6 +27,50 @@ pub struct FeedEntity {
     pub trip_update: Option<TripUpdate>,
     #[prost(message, optional, tag = "4")]
     pub vehicle: Option<VehiclePosition>,
+    #[prost(message, optional, tag = "5")]
+    pub alert: Option<Alert>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct Alert {
+    #[prost(message, repeated, tag = "1")]
+    pub active_period: Vec<TimeRange>,
+    #[prost(message, repeated, tag = "5")]
+    pub informed_entity: Vec<EntitySelector>,
+    #[prost(message, optional, tag = "8")]
+    pub url: Option<TranslatedString>,
+    #[prost(message, optional, tag = "10")]
+    pub header_text: Option<TranslatedString>,
+    #[prost(message, optional, tag = "11")]
+    pub description_text: Option<TranslatedString>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct TimeRange {
+    #[prost(uint64, optional, tag = "1")]
+    pub start: Option<u64>,
+    #[prost(uint64, optional, tag = "2")]
+    pub end: Option<u64>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct EntitySelector {
+    #[prost(string, optional, tag = "2")]
+    pub route_id: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct TranslatedString {
+    #[prost(message, repeated, tag = "1")]
+    pub translation: Vec<Translation>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct Translation {
+    #[prost(string, tag = "1")]
+    pub text: String,
+    #[prost(string, optional, tag = "2")]
+    pub language: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -260,6 +306,7 @@ mod tests {
         FeedEntity {
             id: format!("{trip}_x"),
             trip_update: None,
+            alert: None,
             vehicle: Some(VehiclePosition {
                 trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
                 vehicle: Some(VehicleDescriptor { id: Some(vehicle_id.into()), label: label.map(Into::into) }),
@@ -308,6 +355,7 @@ mod mode_tests {
             entity: vec![FeedEntity {
                 id: "x".into(),
                 trip_update: None,
+                alert: None,
                 vehicle: Some(VehiclePosition {
                     trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
                     vehicle: Some(VehicleDescriptor { id: Some(vehicle_id.into()), label: None }),
@@ -347,6 +395,7 @@ mod delay_tests {
             entity: vec![FeedEntity {
                 id: "x".into(),
                 vehicle: None,
+                alert: None,
                 trip_update: Some(TripUpdate {
                     trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
                     stop_time_update: updates,
@@ -422,6 +471,7 @@ mod place_tests {
         let mk = |trip: &str| FeedEntity {
             id: "x".into(),
             trip_update: None,
+            alert: None,
             vehicle: Some(VehiclePosition {
                 trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
                 vehicle: Some(VehicleDescriptor { id: Some("service-0-8758".into()), label: Some("8758".into()) }),
