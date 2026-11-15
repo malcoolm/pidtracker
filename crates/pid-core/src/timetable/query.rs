@@ -383,9 +383,14 @@ pub enum GoStatus {
     Gone,
     /// Odchod teď (nebo už měl být).
     Now,
-    /// Odchod za N minut (zaokrouhleno nahoru).
+    /// Odchod za N minut (zaokrouhleno nahoru), nejvýš `GO_COUNTDOWN_MAX_MIN`.
     InMin(i64),
+    /// Odchod později než za `GO_COUNTDOWN_MAX_MIN`: ukáže se čas odchodu.
+    At(DateTime<Tz>),
 }
+
+/// Nad tolik minut se místo odpočtu ukáže čas odchodu.
+pub const GO_COUNTDOWN_MAX_MIN: i64 = 90;
 
 impl GoStatus {
     pub fn text(self) -> String {
@@ -393,12 +398,14 @@ impl GoStatus {
             GoStatus::Gone => "Ujelo".into(),
             GoStatus::Now => "Vyrazte hned".into(),
             GoStatus::InMin(n) => format!("Vyrazte do {n} min"),
+            GoStatus::At(t) => format!("Odchod v {}", t.format("%H:%M")),
         }
     }
 }
 
 /// „Ujelo“, když první jízda (`first_dep` + zpoždění zaokrouhlené na minuty jako v
-/// `time_display`, s tolerancí `DEPARTED_GRACE_S`) už odjela; jinak minuty do `leave`.
+/// `time_display`, s tolerancí `DEPARTED_GRACE_S`) už odjela; jinak minuty do `leave`
+/// (nad `GO_COUNTDOWN_MAX_MIN` čas odchodu).
 pub fn go_status(leave: DateTime<Tz>, first_dep: Option<DateTime<Tz>>, delay_s: Option<i32>, now: DateTime<Tz>) -> GoStatus {
     if let Some(dep) = first_dep {
         let mins = (delay_s.unwrap_or(0) as f64 / 60.0).round() as i64;
@@ -407,7 +414,11 @@ pub fn go_status(leave: DateTime<Tz>, first_dep: Option<DateTime<Tz>>, delay_s: 
         }
     }
     let secs = (leave - now).num_seconds();
-    if secs <= 0 { GoStatus::Now } else { GoStatus::InMin((secs + 59) / 60) }
+    match (secs + 59) / 60 {
+        _ if secs <= 0 => GoStatus::Now,
+        n if n <= GO_COUNTDOWN_MAX_MIN => GoStatus::InMin(n),
+        _ => GoStatus::At(leave),
+    }
 }
 
 /// „3 zastávky“ se správným skloňováním.
@@ -631,6 +642,18 @@ mod when_tests {
         assert_eq!(go_status(leave, Some(dep), Some(125), go_t(8, 2, 31)), GoStatus::Gone);
         // Zpoždění pod 30 s se zaokrouhlí na 0 min jako v time_display.
         assert_eq!(go_status(leave, Some(dep), Some(29), go_t(8, 0, 31)), GoStatus::Gone);
+    }
+
+    #[test]
+    fn go_status_far_future_shows_clock() {
+        let leave = go_t(9, 30, 0);
+        // Do 90 min odpočet, dál čas odchodu.
+        assert_eq!(go_status(leave, None, None, go_t(8, 0, 0)), GoStatus::InMin(90));
+        assert_eq!(go_status(leave, None, None, go_t(7, 59, 59)), GoStatus::At(leave));
+        assert_eq!(GoStatus::At(leave).text(), "Odchod v 09:30");
+        // Zítřejší hledání: ne „Vyrazte do 1250 min“.
+        let tomorrow = TZ.with_ymd_and_hms(2026, 11, 17, 7, 5, 0).unwrap();
+        assert_eq!(go_status(tomorrow, None, None, go_t(10, 15, 0)).text(), "Odchod v 07:05");
     }
 
     #[test]
