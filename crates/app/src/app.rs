@@ -7,7 +7,7 @@ use crate::components::Toast;
 use crate::config::{APP_VERSION, BUILD_ID};
 use crate::halloween::{HalloweenDeco, apply_season};
 use crate::screens::{AlertsScreen, Alight, Board, Edit, History, Home, Onboarding, SearchScreen, Settings, Stats};
-use crate::state::{AppState, Screen, TtState};
+use crate::state::{AppState, Screen};
 use crate::topbar::TopBar;
 use crate::{storage, sync, timetable_loader, update};
 
@@ -23,13 +23,7 @@ pub fn App() -> impl IntoView {
         }
         sync::install_triggers(state);
     });
-    spawn_local(async move {
-        let tt = match timetable_loader::load().await {
-            Ok(ix) => TtState::Ready(ix),
-            Err(e) => TtState::Missing(e.message()),
-        };
-        state.tt.set(tt);
-    });
+    timetable_loader::install(state);
     update::install(state);
     crate::alerts::install(state);
     crate::reauth::install(state);
