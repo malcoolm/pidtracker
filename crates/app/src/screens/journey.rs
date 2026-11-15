@@ -11,8 +11,9 @@ use leptos::task::spawn_local;
 use pid_core::realtime::Delays;
 use pid_core::timetable::query::{DelayKind, GoStatus, TimetableIndex, go_status, stops_text, time_display};
 use pid_core::timetable::router::{Journey, Leg};
+use pid_core::timetable::walk::transfer_seconds;
 
-use super::search::{transfers_label, walk_min};
+use super::search::{start_time, transfers_label, walk_min};
 use crate::components::RouteBadge;
 use crate::state::AppState;
 use crate::util::{css_color, duration_label, now, page_hidden};
@@ -143,7 +144,9 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
         f
     });
 
-    let minutes = j.arrive.timestamp().div_euclid(60) - j.leave.timestamp().div_euclid(60);
+    // Ze zastávky začíná spojení odjezdem (rezerva je jen v „Vyrazte do“).
+    let start = start_time(&j);
+    let minutes = j.arrive.timestamp().div_euclid(60) - start.timestamp().div_euclid(60);
     let mut meta = format!("{} · {}", duration_label(minutes), transfers_label(j.transfers));
     if j.walk_s > 0 {
         meta.push_str(&format!(" · pěšky {} min", walk_min(j.walk_s)));
@@ -179,6 +182,11 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
             let next_walk = j.legs.get(i + 1).and_then(|l| match *l {
                 Leg::Walk { seconds, .. } => Some(seconds),
                 Leg::Ride { .. } => None,
+            });
+            // Přestup na stejném stanovišti (bez úseku chůze): další jízda hned navazuje.
+            let next_board = j.legs.get(i + 1).and_then(|l| match *l {
+                Leg::Ride { board_stop, .. } => Some(board_stop),
+                Leg::Walk { .. } => None,
             });
             match *leg {
                 Leg::Walk { from: None, to, seconds } => {
@@ -245,11 +253,20 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
                     rows.extend(ride_stops(ix, leg, color.clone(), trip_id, delays, at));
                     // Za jízdou může následovat chůze; je-li ta poslední, jde do cíle, ne o přestup.
                     let last = i + 1 + usize::from(next_walk.is_some()) == n;
-                    let walk_label = next_walk.filter(|&s| s > 0).map(|s| {
-                        let (prefix, suffix) = if last { ("", " do cíle") } else { ("přestup ", "") };
-                        format!("{prefix}🚶 {} min{suffix}", walk_min(s))
-                    });
-                    let seg = if next_walk.is_some() { Some(None) } else { None };
+                    let walk_label = next_walk
+                        .filter(|&s| s > 0)
+                        .map(|s| {
+                            let (prefix, suffix) = if last { ("", " do cíle") } else { ("přestup ", "") };
+                            format!("{prefix}🚶 {} min{suffix}", walk_min(s))
+                        })
+                        .or_else(|| {
+                            // Nejkratší přestup na místě (metro 4 min, jinak 2 min).
+                            next_board.map(|b| {
+                                let min = transfer_seconds(0, ix.is_metro_stop(alight_stop), ix.is_metro_stop(b));
+                                format!("přestup {} min", min.div_ceil(60))
+                            })
+                        });
+                    let seg = if next_walk.is_some() || next_board.is_some() { Some(None) } else { None };
                     rows.push(
                         row(
                             time_cell(arr, alight_ids, delays, at),
@@ -271,7 +288,7 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
     view! {
         <section class="trip-panel journey-detail">
             <div class="trip-head">
-                <span class="trip-title">{format!("{} → {}", j.leave.format("%H:%M"), j.arrive.format("%H:%M"))}</span>
+                <span class="trip-title">{format!("{} → {}", start.format("%H:%M"), j.arrive.format("%H:%M"))}</span>
                 <button class="link" on:click=move |_| on_close.run(())>"Zpět"</button>
             </div>
             <div class="jd-meta">{meta}</div>

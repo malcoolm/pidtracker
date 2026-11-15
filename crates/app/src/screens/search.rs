@@ -30,6 +30,8 @@ const DELAYS_REFRESH_MS: u32 = 60_000;
 const PAINT_MS: u32 = 30;
 /// Horší přesnost polohy se nepoužije (chůze k zastávkám by neseděla).
 const MAX_ACCURACY_M: f64 = 1000.0;
+/// Starší poloha se před hledáním zjistí znovu.
+const FIX_MAX_AGE_S: i64 = 120;
 /// Počet blízkých uzlů v rozbalení „Moje poloha“.
 const NEAR_NODES: usize = 8;
 /// Formát `<input type="datetime-local">`.
@@ -49,6 +51,8 @@ const EXCLUDABLE: [RouteKind; 7] = [
 enum Origin {
     /// Z polohy uživatele (všechna stanoviště v dosahu chůze).
     Position,
+    /// Z polohy uživatele, ale jen na stanoviště vybraného blízkého uzlu (chůze zůstává).
+    PositionNode(u32),
     /// Ze zastávky (uzlu) vybrané v poli Odkud.
     Stop,
 }
@@ -76,6 +80,95 @@ fn near_nodes(ix: &TimetableIndex, access: &[Access]) -> Vec<(u32, String, u32)>
     }
     best.sort_by_key(|&(g, w)| (w, g));
     best.into_iter().take(NEAR_NODES).map(|(g, w)| (g, ix.tt.group_name(g).to_string(), w)).collect()
+}
+
+/// Signály polohy obrazovky hledání.
+#[derive(Clone, Copy)]
+struct Geo {
+    state: AppState,
+    fix: RwSignal<Option<Fix>>,
+    /// Kdy byla `fix` zjištěna.
+    fix_at: RwSignal<Option<DateTime<Tz>>>,
+    msg: RwSignal<Option<String>>,
+    locating: RwSignal<bool>,
+    origin: RwSignal<Origin>,
+    from_group: RwSignal<Option<u32>>,
+}
+
+impl Geo {
+    /// Poloha chybí, nebo je starší než `FIX_MAX_AGE_S`.
+    fn stale(self) -> bool {
+        self.fix_at.get_untracked().is_none_or(|t| (now() - t).num_seconds() > FIX_MAX_AGE_S)
+    }
+
+    /// Zjistí polohu znovu na pozadí (nic, pokud se už zjišťuje).
+    /// `use_it`: při úspěchu přepnout Odkud na polohu.
+    fn refresh(self, use_it: bool) {
+        if self.locating.get_untracked() {
+            return;
+        }
+        self.locating.set(true);
+        spawn_local(async move {
+            self.run(use_it).await;
+        });
+    }
+
+    /// Zjistí polohu (`locating` musí být nastavené); vrací, zda je poloha použitelná.
+    async fn run(self, use_it: bool) -> bool {
+        let ok = match current_position().await {
+            Ok(f) => {
+                self.state.remember_fix(f);
+                if f.accuracy_m <= MAX_ACCURACY_M {
+                    // Po nezdaru (ne po ručním výběru zastávky) se vrátí poloha sama.
+                    let fallback = self.origin.try_get_untracked() == Some(Origin::Stop)
+                        && self.from_group.try_get_untracked().flatten().is_none()
+                        && self.msg.try_get_untracked().flatten().is_some();
+                    let _ = self.fix.try_set(Some(f));
+                    let _ = self.fix_at.try_set(Some(now()));
+                    let _ = self.msg.try_set(None);
+                    if use_it || fallback {
+                        let _ = self.origin.try_set(Origin::Position);
+                    }
+                    true
+                } else {
+                    self.lost(format!("Poloha je příliš nepřesná (±{:.0} m). Zastávku vyberte ručně.", f.accuracy_m), use_it);
+                    false
+                }
+            }
+            Err(e) => {
+                self.lost(geo_message(e).into(), use_it);
+                false
+            }
+        };
+        let _ = self.locating.try_set(false);
+        ok
+    }
+
+    /// Poloha není: hledání z polohy přejde na výběr zastávky s hláškou.
+    fn lost(self, m: String, explicit: bool) {
+        let _ = self.fix.try_set(None);
+        let _ = self.fix_at.try_set(None);
+        let from_position = self.origin.try_get_untracked().is_some_and(|o| o != Origin::Stop);
+        if from_position || explicit {
+            let _ = self.msg.try_set(Some(m));
+            let _ = self.origin.try_set(Origin::Stop);
+        }
+    }
+}
+
+/// Čas začátku spojení pro kartu a detail: odchod z polohy, jinak odjezd prvního spoje
+/// (bez rezervy, ta je jen v „Vyrazte do“).
+pub(super) fn start_time(j: &Journey) -> DateTime<Tz> {
+    if j.legs.iter().any(|l| matches!(l, Leg::Walk { from: None, .. })) {
+        return j.leave;
+    }
+    j.legs
+        .iter()
+        .find_map(|l| match *l {
+            Leg::Ride { dep, .. } => Some(dep),
+            Leg::Walk { .. } => None,
+        })
+        .unwrap_or(j.leave)
 }
 
 /// Místní čas (Praha); v mezeře při přechodu na letní čas o hodinu později.
@@ -152,7 +245,8 @@ fn JourneyCard(
     let state = expect_context::<AppState>();
     let ix = state.tt.get_untracked().index();
     // Doba podle zobrazených minut, aby „7:44 → 8:21“ bylo vždy „37 min“.
-    let minutes = j.arrive.timestamp().div_euclid(60) - j.leave.timestamp().div_euclid(60);
+    let start = start_time(&j);
+    let minutes = j.arrive.timestamp().div_euclid(60) - start.timestamp().div_euclid(60);
     let mut meta = format!("{} · {}", duration_label(minutes), transfers_label(j.transfers));
     if j.walk_s > 0 {
         meta.push_str(&format!(" · pěšky {} min", walk_min(j.walk_s)));
@@ -229,7 +323,7 @@ fn JourneyCard(
             }
         >
             <div class="jc-head">
-                <span class="jc-times">{format!("{} → {}", hm(j.leave), hm(j.arrive))}</span>
+                <span class="jc-times">{format!("{} → {}", hm(start), hm(j.arrive))}</span>
                 {move || fastest.get().then(|| view! { <span class="jc-label">"nejrychlejší"</span> })}
                 {move || fewest.get().then(|| view! { <span class="jc-label">"nejméně přestupů"</span> })}
             </div>
@@ -245,6 +339,7 @@ pub fn Search() -> impl IntoView {
     let state = expect_context::<AppState>();
     let origin = RwSignal::new(Origin::Position);
     let fix = RwSignal::new(None::<Fix>);
+    let fix_at = RwSignal::new(None::<DateTime<Tz>>);
     let geo_msg = RwSignal::new(None::<String>);
     let locating = RwSignal::new(true);
     let show_near = RwSignal::new(false);
@@ -276,26 +371,18 @@ pub fn Search() -> impl IntoView {
     });
     let selected = RwSignal::new(None::<Journey>);
 
+    let geo = Geo { state, fix, fix_at, msg: geo_msg, locating, origin, from_group };
+    // `locating` začíná jako true, první zjištění tedy běží rovnou.
     spawn_local(async move {
-        match current_position().await {
-            Ok(f) => {
-                state.remember_fix(f);
-                if f.accuracy_m <= MAX_ACCURACY_M {
-                    let _ = fix.try_set(Some(f));
-                } else {
-                    let _ = geo_msg.try_set(Some(format!(
-                        "Poloha je příliš nepřesná (±{:.0} m). Zastávku vyberte ručně.",
-                        f.accuracy_m
-                    )));
-                    let _ = origin.try_set(Origin::Stop);
-                }
-            }
-            Err(e) => {
-                let _ = geo_msg.try_set(Some(geo_message(e).into()));
-                let _ = origin.try_set(Origin::Stop);
-            }
+        geo.run(false).await;
+    });
+    // Návrat z pozadí: poloha mohla zastarat (Home zůstává připojená i hodiny).
+    Effect::new(move |prev: Option<u32>| {
+        let n = state.foreground.get();
+        if prev.is_some_and(|p| p != n) {
+            geo.refresh(false);
         }
-        let _ = locating.try_set(false);
+        n
     });
 
     // Zpoždění: po hledání jednou hned, pak každých 60 s, jen když je stránka vidět.
@@ -381,16 +468,16 @@ pub fn Search() -> impl IntoView {
 
     let can_search = move || {
         let from_ok = match origin.get() {
-            Origin::Position => fix.get().is_some(),
+            Origin::Position | Origin::PositionNode(_) => fix.get().is_some() && !locating.get(),
             Origin::Stop => from_group.get().is_some(),
         };
         state.tt.get().index().is_some() && to_group.get().is_some() && from_ok && !searching.get() && !loading_more.get()
     };
 
-    let search = {
+    let run_search = {
         let alive = alive.clone();
         let fetch_now = fetch_now.clone();
-        move |_| {
+        move || {
             let Some(ix) = state.tt.get_untracked().index() else { return };
             let Some(target) = to_group.get_untracked() else { return };
             message.set(None);
@@ -402,6 +489,20 @@ pub fn Search() -> impl IntoView {
                 Origin::Position => {
                     let Some(f) = fix.get_untracked() else { return };
                     (ix.access_from(f.lat, f.lon), "📍 Moje poloha".to_string())
+                }
+                Origin::PositionNode(g) => {
+                    let Some(f) = fix.get_untracked() else { return };
+                    let name = ix.tt.group_name(g).to_string();
+                    if g == target {
+                        message.set(Some("Odkud a kam je stejná zastávka.".into()));
+                        return;
+                    }
+                    let access = ix.access_from_to_group(f.lat, f.lon, g);
+                    if access.is_empty() {
+                        message.set(Some(format!("{name} je od vás dál než 1,5 km. Vyberte jinou zastávku.")));
+                        return;
+                    }
+                    (access, format!("📍 Moje poloha → {name}"))
                 }
                 Origin::Stop => {
                     let Some(g) = from_group.get_untracked() else { return };
@@ -467,6 +568,34 @@ pub fn Search() -> impl IntoView {
             });
         }
     };
+    // Z polohy: starší poloha se před hledáním zjistí znovu.
+    let search = {
+        let alive = alive.clone();
+        move |_| {
+            let from_position = origin.get_untracked() != Origin::Stop;
+            if !from_position || !geo.stale() {
+                run_search();
+                return;
+            }
+            if locating.get_untracked() {
+                return;
+            }
+            locating.set(true);
+            searching.set(true);
+            let alive = alive.clone();
+            let run_search = run_search.clone();
+            spawn_local(async move {
+                let ok = geo.run(false).await;
+                if !alive.load(Ordering::Relaxed) {
+                    return;
+                }
+                searching.set(false);
+                if ok {
+                    run_search();
+                }
+            });
+        }
+    };
 
     let more = Callback::new({
         let alive = alive.clone();
@@ -521,23 +650,31 @@ pub fn Search() -> impl IntoView {
         }
     };
 
-    let from_field = move || match origin.get() {
-        Origin::Position => view! {
+    // „Moje poloha“; `node` = zúžení na vybraný blízký uzel (chůze z polohy zůstává).
+    let position_field = move |node: Option<u32>| {
+        let label = match node.zip(state.tt.get_untracked().index()) {
+            Some((g, ix)) => format!("📍 Moje poloha → {}", ix.tt.group_name(g)),
+            None => "📍 Moje poloha".to_string(),
+        };
+        view! {
             <button class="search-from" on:click=move |_| show_near.update(|v| *v = !*v)>
-                <span>"📍 Moje poloha"</span>
+                <span>{label}</span>
                 <span class="muted">{move || if locating.get() { "zjišťuji…" } else if show_near.get() { "▴" } else { "▾" }}</span>
             </button>
             <Show when=move || show_near.get()>
                 <div class="chips near-nodes">
+                    {node.map(|_| view! {
+                        <button class="chip" on:click=move |_| {
+                            origin.set(Origin::Position);
+                            show_near.set(false);
+                        }>"Všechny zastávky v okolí"</button>
+                    })}
                     <For each=move || nodes.get() key=|n| n.0 let:n>
                         {
                             let (g, name, walk) = n;
-                            let picked = name.clone();
                             view! {
-                                <button class="chip" on:click=move |_| {
-                                    from_text.set(picked.clone());
-                                    from_group.set(Some(g));
-                                    origin.set(Origin::Stop);
+                                <button class="chip" class:selected=move || node == Some(g) on:click=move |_| {
+                                    origin.set(Origin::PositionNode(g));
                                     show_near.set(false);
                                 }>
                                     {name}<small>{format!(" · 🚶{} min", walk_min(walk))}</small>
@@ -554,7 +691,10 @@ pub fn Search() -> impl IntoView {
                 </div>
             </Show>
         }
-        .into_any(),
+    };
+    let from_field = move || match origin.get() {
+        Origin::Position => position_field(None).into_any(),
+        Origin::PositionNode(g) => position_field(Some(g)).into_any(),
         Origin::Stop => view! {
             <StopInput
                 text=from_text
@@ -563,7 +703,14 @@ pub fn Search() -> impl IntoView {
                 candidates=from_candidates
                 placeholder="Odkud – zastávka…"
             />
-            <Show when=move || fix.get().is_some()>
+            <Show
+                when=move || fix.get().is_some()
+                fallback=move || view! {
+                    <button class="link small search-back" disabled=move || locating.get() on:click=move |_| geo.refresh(true)>
+                        {move || if locating.get() { "📍 Zjišťuji polohu…" } else { "📍 Zkusit znovu zjistit polohu" }}
+                    </button>
+                }
+            >
                 <button class="link small search-back" on:click=move |_| origin.set(Origin::Position)>"📍 Použít moji polohu"</button>
             </Show>
         }
