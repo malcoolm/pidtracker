@@ -41,7 +41,7 @@ pub fn SyncBadge() -> impl IntoView {
                 SyncStatus::Running => view! { <span class="muted">"Synchronizuji…"</span> }.into_any(),
                 SyncStatus::Pending(n) => view! { <span class="warn">{format!("Čeká {n} změn na odeslání")}</span> }.into_any(),
                 SyncStatus::NeedsSignIn(n) => view! {
-                    <button class="link" on:click=move |_| {
+                    <button class="link" data-no-reauth="1" on:click=move |_| {
                         let fut = sign_in(me().as_deref());
                         spawn_local(async move {
                             match fut.await {

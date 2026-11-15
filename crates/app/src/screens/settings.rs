@@ -66,7 +66,7 @@ pub fn Settings() -> impl IntoView {
             <p>{me}</p>
             <div class="row">
                 <Show when=move || !signed_in.get()>
-                    <button class="secondary" on:click=do_sign_in>"Přihlásit pro synchronizaci"</button>
+                    <button class="secondary" data-no-reauth="1" on:click=do_sign_in>"Přihlásit pro synchronizaci"</button>
                 </Show>
                 <button class="link danger" on:click=do_sign_out>"Odhlásit"</button>
             </div>

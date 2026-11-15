@@ -47,7 +47,7 @@ pub fn Onboarding() -> impl IntoView {
             <h1>"PID Tracker"</h1>
             <p class="muted">"Zaznamenávání jízd pražskou MHD do společné Google tabulky."</p>
             <p>"Přihlaste se Google účtem, se kterým je tabulka s jízdami nasdílená."</p>
-            <button class="primary big" disabled=move || busy.get() on:click=do_sign_in>
+            <button class="primary big" data-no-reauth="1" disabled=move || busy.get() on:click=do_sign_in>
                 {move || if busy.get() { "Přihlašuji…" } else { "Přihlásit se Googlem" }}
             </button>
             {move || error.get().map(|e| view! { <p class="error">{e}</p> })}

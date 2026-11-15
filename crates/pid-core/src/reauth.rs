@@ -17,10 +17,12 @@ pub struct RefreshInput {
 }
 
 pub fn should_refresh(i: &RefreshInput) -> bool {
-    if !(i.signed_in_before && i.online && !i.in_flight) {
+    if !(i.signed_in_before && i.online) {
         return false;
     }
-    if i.last_attempt_ms.is_some_and(|t| i.now_ms - t < MIN_ATTEMPT_GAP_MS) {
+    let recent = i.last_attempt_ms.is_some_and(|t| i.now_ms - t < MIN_ATTEMPT_GAP_MS);
+    // Zaseknutý pokus (popup bez callbacku) starší než odstup se za probíhající nepočítá.
+    if recent || (i.in_flight && i.last_attempt_ms.is_none()) {
         return false;
     }
     i.expires_at_ms.is_none_or(|e| e - i.now_ms < REFRESH_BEFORE_MS)
@@ -60,6 +62,10 @@ mod tests {
         assert!(should_refresh(&older));
         assert!(!should_refresh(&RefreshInput { online: false, ..base() }));
         assert!(!should_refresh(&RefreshInput { in_flight: true, ..base() }));
+        let stuck = RefreshInput { in_flight: true, last_attempt_ms: Some(1_000_000.0 - 130_000.0), ..base() };
+        assert!(should_refresh(&stuck));
+        let busy = RefreshInput { in_flight: true, last_attempt_ms: Some(1_000_000.0 - 30_000.0), ..base() };
+        assert!(!should_refresh(&busy));
         assert!(!should_refresh(&RefreshInput { signed_in_before: false, ..base() }));
     }
 }

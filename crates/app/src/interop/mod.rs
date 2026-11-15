@@ -68,11 +68,11 @@ export function sessionSet(key, value) {
   try { sessionStorage.setItem(key, value); } catch (_) {}
 }
 
-// Klepnutí kdekoli (capture), mimo textová pole; `cb` běží synchronně, aby šlo otevřít popup v rámci gesta.
+// Klepnutí kdekoli (capture), mimo textová pole, popisky a ruční přihlášení (data-no-reauth); `cb` běží synchronně, aby šlo otevřít popup v rámci gesta.
 export function onUserTap(cb) {
   document.addEventListener('click', (e) => {
     const t = e.target;
-    if (t && t.closest && t.closest('input, textarea, select')) return;
+    if (t && t.closest && t.closest('input, textarea, select, label, [contenteditable], [data-no-reauth]')) return;
     cb();
   }, true);
 }
