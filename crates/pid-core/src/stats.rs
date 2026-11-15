@@ -177,8 +177,8 @@ fn sorted_counts<K: Ord + Clone>(map: HashMap<K, u32>) -> Vec<(K, u32)> {
     v
 }
 
-pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
-    let all_rides = rides;
+/// Vyfiltruje dokončené, nesmazané jízdy v období, seskupené podle osoby (malá písmena).
+fn filtered_by_person<'a>(rides: &'a [Ride], q: &StatsQuery) -> BTreeMap<String, Vec<&'a Ride>> {
     let wanted: Vec<String> = q.persons.iter().map(|p| p.to_lowercase()).collect();
     let mut per_person: BTreeMap<String, Vec<&Ride>> = wanted.iter().map(|p| (p.clone(), Vec::new())).collect();
     for r in rides {
@@ -190,51 +190,63 @@ pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
             per_person.entry(person).or_default().push(r);
         }
     }
-
     per_person
+}
+
+/// Statistiky z již vyfiltrovaných jízd; `all` slouží k dohledání SPZ vozu.
+fn person_stats(person: String, rides: Vec<&Ride>, all: &[Ride], period: Period) -> PersonStats {
+    let minutes = rides
+        .iter()
+        .filter_map(|r| r.duration_minutes())
+        .filter(|&m| m > 0 && m <= MAX_COUNTED_MINUTES)
+        .sum();
+    let mut kinds = HashMap::new();
+    let mut routes = HashMap::new();
+    let mut operators = HashMap::new();
+    let mut vehicles = HashMap::new();
+    for r in &rides {
+        *kinds.entry(r.kind()).or_insert(0) += 1;
+        *routes.entry(r.route_short_name.clone()).or_insert(0) += 1;
+        if !r.operator.trim().is_empty() {
+            *operators.entry(r.operator.trim().to_string()).or_insert(0) += 1;
+        }
+        if !r.vehicle.trim().is_empty() {
+            *vehicles.entry(r.vehicle.trim().to_string()).or_insert(0) += 1;
+        }
+    }
+    let mut top_routes = sorted_counts(routes);
+    top_routes.truncate(TOP_ROUTES);
+    let mut by_vehicle = sorted_counts(vehicles);
+    by_vehicle.truncate(TOP_VEHICLES);
+    // SPZ ze všech jízd vozu (i jiné osoby a mimo období) – vůz má pořád stejnou.
+    let by_vehicle = by_vehicle
         .into_iter()
-        .map(|(person, rides)| {
-            let minutes = rides
-                .iter()
-                .filter_map(|r| r.duration_minutes())
-                .filter(|&m| m > 0 && m <= MAX_COUNTED_MINUTES)
-                .sum();
-            let mut kinds = HashMap::new();
-            let mut routes = HashMap::new();
-            let mut operators = HashMap::new();
-            let mut vehicles = HashMap::new();
-            for r in &rides {
-                *kinds.entry(r.kind()).or_insert(0) += 1;
-                *routes.entry(r.route_short_name.clone()).or_insert(0) += 1;
-                if !r.operator.trim().is_empty() {
-                    *operators.entry(r.operator.trim().to_string()).or_insert(0) += 1;
-                }
-                if !r.vehicle.trim().is_empty() {
-                    *vehicles.entry(r.vehicle.trim().to_string()).or_insert(0) += 1;
-                }
-            }
-            let mut top_routes = sorted_counts(routes);
-            top_routes.truncate(TOP_ROUTES);
-            let mut by_vehicle = sorted_counts(vehicles);
-            by_vehicle.truncate(TOP_VEHICLES);
-            // SPZ ze všech jízd vozu (i jiné osoby a mimo období) – vůz má pořád stejnou.
-            let by_vehicle = by_vehicle
-                .into_iter()
-                .map(|(vehicle, n)| VehicleCount { plate: crate::ride::known_plate(all_rides, &vehicle), vehicle, rides: n })
-                .collect();
-            let dates: Vec<NaiveDate> = rides.iter().map(|r| local_date(r)).collect();
-            PersonStats {
-                person,
-                rides: rides.len() as u32,
-                minutes,
-                by_kind: sorted_counts(kinds),
-                by_operator: sorted_counts(operators),
-                by_vehicle,
-                top_routes,
-                series: series(q.period, &dates),
-            }
-        })
+        .map(|(vehicle, n)| VehicleCount { plate: crate::ride::known_plate(all, &vehicle), vehicle, rides: n })
+        .collect();
+    let dates: Vec<NaiveDate> = rides.iter().map(|r| local_date(r)).collect();
+    PersonStats {
+        person,
+        rides: rides.len() as u32,
+        minutes,
+        by_kind: sorted_counts(kinds),
+        by_operator: sorted_counts(operators),
+        by_vehicle,
+        top_routes,
+        series: series(period, &dates),
+    }
+}
+
+pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
+    filtered_by_person(rides, q)
+        .into_iter()
+        .map(|(person, rs)| person_stats(person, rs, rides, q.period))
         .collect()
+}
+
+/// Sloučené statistiky všech osob z `q.persons` (prázdné = všichni); `person` je prázdný řetězec.
+pub fn compute_combined(rides: &[Ride], q: &StatsQuery) -> PersonStats {
+    let all: Vec<&Ride> = filtered_by_person(rides, q).into_values().flatten().collect();
+    person_stats(String::new(), all, rides, q.period)
 }
 
 #[cfg(test)]
@@ -343,6 +355,24 @@ mod tests {
         let y = compute(&rides(), &StatsQuery { period: Period::Year(2026), persons: vec![] });
         assert_eq!(person(&y, TATA).series.len(), 12);
         assert_eq!(person(&y, TATA).series[10], ("11".into(), 1));
+    }
+
+    #[test]
+    fn combined_sums_both_persons() {
+        let q = StatsQuery { period: Period::All, persons: vec![] };
+        let per = compute(&rides(), &q);
+        let c = compute_combined(&rides(), &q);
+        assert_eq!(c.person, "");
+        assert_eq!(c.rides, per.iter().map(|p| p.rides).sum::<u32>());
+        assert_eq!(c.minutes, per.iter().map(|p| p.minutes).sum::<i64>());
+        assert_eq!(c.series.len(), person(&per, TATA).series.len());
+        assert_eq!(c.series.iter().map(|x| x.1).sum::<u32>(), c.rides);
+        // V říjnu jela linku 22 jednou táta a jednou syn.
+        let m = compute_combined(&rides(), &month(10));
+        assert_eq!(m.rides, 4);
+        assert_eq!(m.top_routes.iter().find(|r| r.0 == "22").map(|r| r.1), Some(2));
+        assert_eq!(m.series.len(), 31);
+        assert_eq!(m.series.iter().map(|x| x.1).sum::<u32>(), 4);
     }
 
     #[test]
