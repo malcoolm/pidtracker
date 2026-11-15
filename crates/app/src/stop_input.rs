@@ -21,6 +21,9 @@ pub fn StopInput(
     candidates: Option<Signal<Vec<NearbyGroup>>>,
     #[prop(optional, into)] placeholder: Option<String>,
     #[prop(optional)] on_pick: Option<Callback<u32>>,
+    /// Prázdné pole bez návrhů (např. cíl cesty, kde okolí polohy nedává smysl).
+    #[prop(optional)]
+    no_empty_suggestions: bool,
 ) -> impl IntoView {
     let state = expect_context::<AppState>();
     let has_tt = move || state.tt.get().index().is_some();
@@ -31,6 +34,9 @@ pub fn StopInput(
         let Some(ix) = state.tt.get().index() else { return Vec::new() };
         let q = query();
         if q.trim().is_empty() {
+            if no_empty_suggestions {
+                return Vec::new();
+            }
             if let Some(c) = candidates.map(|c| c.get()).filter(|c| !c.is_empty()) {
                 return c;
             }

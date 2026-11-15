@@ -455,10 +455,30 @@ pub fn Search() -> impl IntoView {
             });
         }
     });
-    let more_label = move || match (loading_more.get(), shown_mode.get()) {
-        (true, _) => "Hledám…",
-        (false, TimeMode::DepartAt) => "Další spojení ↓",
-        (false, TimeMode::ArriveBy) => "Dřívější spojení ↑",
+    // „Další spojení“ tam, kde se nová spojení objeví: u příjezdu nad seznamem (dřívější), jinak pod ním.
+    let more_block = move |top: bool| {
+        move || {
+            let earlier = shown_mode.get() == TimeMode::ArriveBy;
+            if earlier != top || !searched.get() || results.with(|r| r.is_empty()) {
+                return None;
+            }
+            Some(if no_more.get() {
+                let text = if earlier { "Dřívější spojení nenalezena." } else { "Další spojení nenalezena." };
+                view! { <p class="muted small">{text}</p> }.into_any()
+            } else {
+                let label = move || match (loading_more.get(), earlier) {
+                    (true, _) => "Hledám…",
+                    (false, false) => "Další spojení ↓",
+                    (false, true) => "Dřívější spojení ↑",
+                };
+                view! {
+                    <button class="link search-more" disabled=move || loading_more.get() on:click=move |_| more.run(())>
+                        {label}
+                    </button>
+                }
+                .into_any()
+            })
+        }
     };
 
     let from_field = move || match origin.get() {
@@ -520,7 +540,7 @@ pub fn Search() -> impl IntoView {
                 </div>
                 <div class="search-field">
                     <span class="search-label">"Kam"</span>
-                    <StopInput text=to_text selected=to_group near=near placeholder="Kam – zastávka…" />
+                    <StopInput text=to_text selected=to_group near=near placeholder="Kam – zastávka…" no_empty_suggestions=true />
                 </div>
                 <div class="search-time">
                     <div class="segmented">
@@ -558,6 +578,7 @@ pub fn Search() -> impl IntoView {
             <Show when=move || searched.get() && results.with(|r| r.is_empty())>
                 <p class="muted">"Spojení nenalezeno. Zkuste jiný čas nebo povolte víc druhů dopravy."</p>
             </Show>
+            {more_block(true)}
             <div class="list">
                 {move || {
                     let l = lab.get();
@@ -571,16 +592,7 @@ pub fn Search() -> impl IntoView {
                         .collect_view()
                 }}
             </div>
-            <Show when=move || searched.get() && results.with(|r| !r.is_empty())>
-                <Show
-                    when=move || !no_more.get()
-                    fallback=|| view! { <p class="muted small">"Další spojení nenalezena."</p> }
-                >
-                    <button class="link search-more" disabled=move || loading_more.get() on:click=move |_| more.run(())>
-                        {more_label}
-                    </button>
-                </Show>
-            </Show>
+            {more_block(false)}
         </section>
     }
 }
