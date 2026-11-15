@@ -6,7 +6,7 @@ use gloo_net::http::Request;
 use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use pid_core::alerts::{AlertPhase, ServiceAlert, fresh_relevant, list_alerts, parse_alerts, watched_routes};
+use pid_core::alerts::{AlertPhase, ServiceAlert, fresh_relevant, list_alerts, try_parse_alerts, watched_routes};
 use pid_core::realtime::ALERTS_URL;
 use pid_core::time::TZ;
 use pid_core::timetable::query::DepartureSource;
@@ -87,10 +87,7 @@ async fn fetch_alerts() -> Option<Vec<ServiceAlert>> {
         return None;
     }
     let bytes = resp.binary().await.ok()?;
-    if bytes.is_empty() {
-        return None;
-    }
-    Some(dedupe(parse_alerts(&bytes)))
+    Some(dedupe(try_parse_alerts(&bytes)?))
 }
 
 /// Uloží nový stav feedu a spočte nové mimořádnosti pro pruh.
@@ -118,14 +115,17 @@ fn apply(state: AppState, fetched: Vec<ServiceAlert>) {
                 });
             }
             // Prořezání na id přítomná ve feedu.
-            let mut next: Vec<String> = seen.into_iter().filter(|id| ids.contains(id)).collect();
-            for id in fresh {
-                if !next.contains(&id) {
-                    next.push(id);
+            // Prázdný výsledek seen neprořezává (ochrana proti záplavě hlášek).
+            if !ids.is_empty() {
+                let mut next: Vec<String> = seen.into_iter().filter(|id| ids.contains(id)).collect();
+                for id in fresh {
+                    if !next.contains(&id) {
+                        next.push(id);
+                    }
                 }
+                next.sort();
+                ls_set(keys::ALERTS_SEEN, &next);
             }
-            next.sort();
-            ls_set(keys::ALERTS_SEEN, &next);
         }
     }
     state.alert_banner.update(|b| b.retain(|id| ids.contains(id)));

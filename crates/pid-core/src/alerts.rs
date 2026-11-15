@@ -59,8 +59,15 @@ fn is_relevant(a: &ServiceAlert, watched: &HashSet<String>) -> bool {
 
 /// Přečte feed mimořádností; chybný feed dá prázdný seznam.
 pub fn parse_alerts(feed: &[u8]) -> Vec<ServiceAlert> {
-    let Ok(msg) = FeedMessage::decode(feed) else { return Vec::new() };
-    msg.entity
+    try_parse_alerts(feed).unwrap_or_default()
+}
+
+/// Jako `parse_alerts`, ale nečitelný feed (např. HTML přihlašovací stránky) dá `None`,
+/// aby se dalo odlišit od legitimně prázdného feedu.
+pub fn try_parse_alerts(feed: &[u8]) -> Option<Vec<ServiceAlert>> {
+    let msg = FeedMessage::decode(feed).ok()?;
+    Some(
+        msg.entity
         .into_iter()
         .filter_map(|e| {
             let a = e.alert?;
@@ -87,7 +94,8 @@ pub fn parse_alerts(feed: &[u8]) -> Vec<ServiceAlert> {
                 end,
             })
         })
-        .collect()
+        .collect(),
+    )
 }
 
 /// Linky, na kterých jsem jel v posledních `days` dnech (nebo právě jedu).
@@ -139,6 +147,13 @@ pub fn fresh_relevant<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn garbage_feed_is_none() {
+        assert!(try_parse_alerts(b"<html><body>Login to continue</body></html>").is_none());
+        assert!(parse_alerts(b"<html>").is_empty());
+        assert_eq!(try_parse_alerts(b""), Some(Vec::new()));
+    }
     use crate::realtime::{Alert, EntitySelector, FeedEntity, TimeRange, Translation};
     use crate::ride::tests::sample_ride;
 

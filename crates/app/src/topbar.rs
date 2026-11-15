@@ -99,6 +99,13 @@ pub fn TopBar() -> impl IntoView {
 #[component]
 pub fn AlertBanner() -> impl IntoView {
     let state = expect_context::<AppState>();
+    // Třída na <html> posune překryvy (menu, detail spoje) pod pruh.
+    Effect::new(move |_| {
+        let shown = state.alert_banner.with(|b| !b.is_empty());
+        if let Some(cl) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.document_element()).map(|e| e.class_list()) {
+            let _ = if shown { cl.add_1("has-banner") } else { cl.remove_1("has-banner") };
+        }
+    });
     let content = move || {
         let ids = state.alert_banner.get();
         let found: Vec<ServiceAlert> =

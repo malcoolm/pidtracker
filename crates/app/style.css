@@ -319,10 +319,10 @@ h3.day { text-transform: none; letter-spacing: 0; font-size: 15px; }
 }
 
 /* Boční menu */
-.menu-backdrop { position: fixed; inset: calc(48px + env(safe-area-inset-top)) 0 0 0; background: rgba(0, 0, 0, .5); z-index: 40; }
+.menu-backdrop { position: fixed; inset: calc(48px + env(safe-area-inset-top) + var(--banner-h, 0px)) 0 0 0; background: rgba(0, 0, 0, .5); z-index: 40; }
 .menu {
   position: fixed;
-  top: calc(48px + env(safe-area-inset-top));
+  top: calc(48px + env(safe-area-inset-top) + var(--banner-h, 0px));
   bottom: 0;
   left: 0;
   width: 75%;
@@ -499,7 +499,7 @@ html.halloween .app { position: relative; z-index: 1; }
 /* Detail spoje (celoobrazovkový panel pod horním proužkem, pod menu) */
 .trip-panel {
   position: fixed;
-  top: calc(48px + env(safe-area-inset-top));
+  top: calc(48px + env(safe-area-inset-top) + var(--banner-h, 0px));
   right: 0;
   bottom: 0;
   left: 0;
@@ -547,11 +547,14 @@ html.halloween .app { position: relative; z-index: 1; }
   font-weight: 500;
 }
 
-/* Mimořádnosti */
+/* Mimořádnosti; html.has-banner posune překryvy (menu, detail spoje) pod pruh */
+html.has-banner { --banner-h: 44px; }
 .alert-banner {
   position: sticky;
   top: calc(48px + env(safe-area-inset-top));
   z-index: 44;
+  height: 44px;
+  overflow: hidden;
   display: flex;
   align-items: center;
   background: var(--warn);
