@@ -135,6 +135,14 @@ impl TimetableIndex {
             .collect()
     }
 
+    /// `access_from` zúžené na stanoviště uzlu `group` (výběr blízkého uzlu pod
+    /// „Moje poloha“): chůze z polohy zůstává. Prázdné, je-li uzel mimo dosah chůze.
+    pub fn access_from_to_group(&self, lat: f64, lon: f64, group: u32) -> Vec<Access> {
+        let mut acc = self.access_from(lat, lon);
+        acc.retain(|a| self.tt.stops[a.stop as usize].group == group);
+        acc
+    }
+
     /// Všechna stanoviště uzlu s `walk_s = 0`.
     pub fn access_group(&self, group: u32) -> Vec<Access> {
         self.tt.groups[group as usize].stops.iter().map(|&stop| Access { stop, walk_s: 0 }).collect()
@@ -1218,6 +1226,23 @@ mod tests {
         assert_eq!(ix.access_from(lat, lon), vec![Access { stop: S1, walk_s: walk_seconds(1400.0) }]);
         let (lat, lon) = north_of_s1(1600.0);
         assert!(ix.access_from(lat, lon).iter().all(|a| a.stop != S1));
+    }
+
+    #[test]
+    fn access_from_to_group_keeps_walk() {
+        let ix = net();
+        let (lat, lon) = north_of_s1(999.99);
+        // Zúžení na uzel Start: chůze z polohy zůstává (ne walk_s = 0 jako u access_group).
+        let acc = ix.access_from_to_group(lat, lon, START);
+        assert_eq!(acc, vec![Access { stop: S1, walk_s: walk_seconds(1000.0) }]);
+        let mut q = query(t(7, 30));
+        q.origins = acc;
+        let js = ix.plan_once(&q);
+        assert!(!js.is_empty());
+        assert!(js.iter().all(|j| matches!(j.legs[0], Leg::Walk { from: None, to: S1, seconds } if seconds > 0)));
+        assert!(js.iter().all(|j| (rides(j)[0].2 - j.leave).num_seconds() >= i64::from(walk_seconds(1000.0))));
+        // Uzel mimo dosah chůze: nic.
+        assert!(ix.access_from_to_group(lat, lon, CIL).is_empty());
     }
 
     #[test]
