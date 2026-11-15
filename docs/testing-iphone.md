@@ -130,3 +130,63 @@ Když žádný zpožděný spoj není, zapište „neověřeno“ a zkuste pozd�
       **Přihlásit pro synchronizaci** funguje dál.
 - [ ] Pokud okno zůstane prázdné nebo nejde zavřít (aplikace na ploše), zapište sem, co se
       stalo, a verzi iOS. Obnova se pak pro iOS standalone vypne (viz spec 4.9).
+
+## Kontrolní bod H – verze 0.6.0
+
+Vyhledávání spojení běží celé v telefonu z jízdních řádů, proto vše zkoušejte i bez sítě.
+Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
+
+**Hledání z polohy (venku)**
+
+- [ ] Menu ☰ → **Spojení** otevře vyhledávání. Venku klepněte do pole „Odkud“ a vyberte
+      **📍 Moje poloha**, do pole „Kam“ napište cíl (např. „Letňany“) a vyberte ho z nabídky.
+- [ ] Klepněte na **Hledat** a změřte čas do zobrazení výsledků: _____ ms (cíl pod 300 ms,
+      přijatelné do ~1 s). Seznam ukazuje odjezd → příjezd, dobu, přestupy a první řádek
+      „Vyrazte do HH:MM“ nebo „Vyrazte hned“.
+- [ ] Spojení začíná řádkem „📍 Moje poloha · 🚶 N min na zastávku …“.
+
+**Hledání ze zvolené zastávky a příjezd**
+
+- [ ] Do „Odkud“ napište zastávku ručně (ne polohu) a vyberte ji. Najde se spojení do cíle.
+- [ ] Přepněte na **Příjezd**, zvolte čas a hledejte: všechna spojení přijedou do zvoleného času
+      nebo dřív.
+- [ ] Tlačítko pro dřívější/pozdější spojení doplní seznam a nic se neduplikuje.
+
+**Nastavení hledání**
+
+- [ ] V Nastavení vyloučte druh dopravy (např. autobus), hledejte: výsledky ho neobsahují.
+      Zavřete a znovu otevřete aplikaci: vyloučení se pamatuje.
+- [ ] Změňte **Rezervu na cestu** (např. z 2 na 5 min): v hledání se „Vyrazte do“ posune
+      o rozdíl dřív.
+
+**Detail spojení**
+
+- [ ] Klepnutí na spojení otevře detail: časová osa s jízdami, zastávkami a nástupišti.
+      Přestupní chůze je „přestup 🚶 N min“, poslední chůze k cíli „🚶 N min do cíle“
+      (bez „přestup“). Cílový řádek je „🏁 …“.
+- [ ] Ve špičce vyberte spoj se zpožděním: původní čas přeškrtnutý, vedle nový čas. Záhlaví
+      ukazuje „Vyrazte hned“ nebo po odjezdu červené „Ujelo“. Zpoždění se mění za provozu.
+      Není-li žádný spoj zpožděný, zapište „neověřeno“.
+
+**Pozdní večer**
+
+- [ ] Po 22:00 vyhledejte spojení (čas změřte jako výše): _____ ms. Zobrazí se noční
+      linky, nebo srozumitelná zpráva, že nic nejede; aplikace nespadne.
+
+**Offline**
+
+- [ ] Zapněte režim Letadlo, aplikaci zavřete a znovu otevřete. Hledání spojení funguje
+      stejně (včetně času) a detail se otevře. Poloha může být bez sítě nedostupná,
+      zastávka zadaná ručně funguje.
+
+**Tmavý režim**
+
+- [ ] Systém v tmavém režimu: obrazovka hledání (pole, seznam spojení, nabídka) i detail
+      spojení (osa, barevné linky, „Ujelo“) jsou čitelné, nic není bílé na bílém.
+
+**Probíhající jízda**
+
+- [ ] Spusťte jízdu (Nová jízda → Nástup). Úvodní obrazovka ukazuje probíhající jízdu
+      s tlačítkem **Výstup**, ne hledání.
+- [ ] V menu ☰ je nad „Spojení“ položka **Probíhající jízda**; klepnutí na ni vrátí na jízdu.
+      Po Výstupu je úvodní obrazovkou zase hledání spojení.
