@@ -376,6 +376,49 @@ pub fn time_display(scheduled: DateTime<Tz>, delay_s: Option<i32>, now: DateTime
     }
 }
 
+/// Stav „vyrazte“ v detailu spojení.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GoStatus {
+    /// První spoj už odjel (podle zpoždění).
+    Gone,
+    /// Odchod teď (nebo už měl být).
+    Now,
+    /// Odchod za N minut (zaokrouhleno nahoru).
+    InMin(i64),
+}
+
+impl GoStatus {
+    pub fn text(self) -> String {
+        match self {
+            GoStatus::Gone => "Ujelo".into(),
+            GoStatus::Now => "Vyrazte hned".into(),
+            GoStatus::InMin(n) => format!("Vyrazte do {n} min"),
+        }
+    }
+}
+
+/// „Ujelo“, když první jízda (`first_dep` + zpoždění zaokrouhlené na minuty jako v
+/// `time_display`, s tolerancí `DEPARTED_GRACE_S`) už odjela; jinak minuty do `leave`.
+pub fn go_status(leave: DateTime<Tz>, first_dep: Option<DateTime<Tz>>, delay_s: Option<i32>, now: DateTime<Tz>) -> GoStatus {
+    if let Some(dep) = first_dep {
+        let mins = (delay_s.unwrap_or(0) as f64 / 60.0).round() as i64;
+        if dep + Duration::minutes(mins) + Duration::seconds(DEPARTED_GRACE_S) < now {
+            return GoStatus::Gone;
+        }
+    }
+    let secs = (leave - now).num_seconds();
+    if secs <= 0 { GoStatus::Now } else { GoStatus::InMin((secs + 59) / 60) }
+}
+
+/// „3 zastávky“ se správným skloňováním.
+pub fn stops_text(n: usize) -> String {
+    match n {
+        1 => "1 zastávka".into(),
+        2..=4 => format!("{n} zastávky"),
+        _ => format!("{n} zastávek"),
+    }
+}
+
 fn next_rows_per_direction(rows: Vec<BoardRow>) -> Vec<BoardRow> {
     let mut seen = std::collections::HashSet::new();
     rows.into_iter().filter(|r| seen.insert((r.dep.route_id.clone(), r.dep.headsign.clone()))).collect()
@@ -560,6 +603,42 @@ impl DepartureSource for TimetableIndex {
 
 #[cfg(test)]
 mod when_tests {
+
+    fn go_t(h: u32, m: u32, sec: u32) -> DateTime<Tz> {
+        TZ.with_ymd_and_hms(2026, 11, 16, h, m, sec).unwrap()
+    }
+
+    #[test]
+    fn go_status_countdown() {
+        let leave = go_t(8, 0, 0);
+        assert_eq!(go_status(leave, None, None, go_t(7, 58, 0)), GoStatus::InMin(2));
+        assert_eq!(go_status(leave, None, None, go_t(7, 58, 30)), GoStatus::InMin(2));
+        assert_eq!(go_status(leave, None, None, go_t(8, 0, 0)), GoStatus::Now);
+        assert_eq!(go_status(leave, None, None, go_t(8, 5, 0)), GoStatus::Now);
+        assert_eq!(GoStatus::InMin(2).text(), "Vyrazte do 2 min");
+        assert_eq!(GoStatus::Now.text(), "Vyrazte hned");
+    }
+
+    #[test]
+    fn go_status_gone_boundary() {
+        let dep = go_t(8, 0, 0);
+        let leave = go_t(7, 55, 0);
+        assert_eq!(go_status(leave, Some(dep), None, go_t(8, 0, 30)), GoStatus::Now);
+        assert_eq!(go_status(leave, Some(dep), None, go_t(8, 0, 31)), GoStatus::Gone);
+        assert_eq!(GoStatus::Gone.text(), "Ujelo");
+        // Zpoždění 125 s se zobrazí jako +2 min: odjezd 8:02.
+        assert_eq!(go_status(leave, Some(dep), Some(125), go_t(8, 2, 30)), GoStatus::Now);
+        assert_eq!(go_status(leave, Some(dep), Some(125), go_t(8, 2, 31)), GoStatus::Gone);
+        // Zpoždění pod 30 s se zaokrouhlí na 0 min jako v time_display.
+        assert_eq!(go_status(leave, Some(dep), Some(29), go_t(8, 0, 31)), GoStatus::Gone);
+    }
+
+    #[test]
+    fn stops_plural() {
+        assert_eq!(stops_text(1), "1 zastávka");
+        assert_eq!(stops_text(3), "3 zastávky");
+        assert_eq!(stops_text(6), "6 zastávek");
+    }
     use super::*;
     use crate::time::TZ;
     use chrono::TimeZone;

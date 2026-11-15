@@ -3,13 +3,13 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use chrono::{DateTime, Duration};
+use chrono::DateTime;
 use chrono_tz::Tz;
 use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::realtime::Delays;
-use pid_core::timetable::query::{DelayKind, TimetableIndex, time_display};
+use pid_core::timetable::query::{DelayKind, GoStatus, TimetableIndex, go_status, stops_text, time_display};
 use pid_core::timetable::router::{Journey, Leg};
 
 use super::search::{transfers_label, walk_min};
@@ -19,24 +19,6 @@ use crate::util::{css_color, duration_label, now, page_hidden};
 
 /// Jak často se přepočítá „Vyrazte do N min“ (jen místní čas, žádné stahování).
 const TICK_MS: u32 = 15_000;
-
-/// „3 zastávky“ se správným skloňováním.
-fn stops_text(n: usize) -> String {
-    match n {
-        1 => "1 zastávka".into(),
-        2..=4 => format!("{n} zastávky"),
-        _ => format!("{n} zastávek"),
-    }
-}
-
-/// Text „Vyrazte …“ z minut do odchodu; `gone` = první spoj už odjel.
-fn go_text(leave: DateTime<Tz>, now: DateTime<Tz>, gone: bool) -> String {
-    if gone {
-        return "Ujelo".into();
-    }
-    let secs = (leave - now).num_seconds();
-    if secs <= 0 { "Vyrazte hned".into() } else { format!("Vyrazte do {} min", (secs + 59) / 60) }
-}
 
 /// Čas události se zpožděním z živých dat (jen u jízdy, jinak holý čas).
 fn time_cell(
@@ -54,7 +36,7 @@ fn time_cell(
             DelayKind::OnTime | DelayKind::Unknown => ("", None),
         };
         let main = match t.actual {
-            Some(actual) => view! { <b class=class>{actual}</b> }.into_any(),
+            Some(actual) => view! { <s class="sched">{t.scheduled}</s>" "<b class=class>{actual}</b> }.into_any(),
             None => view! { <b>{t.scheduled}</b> }.into_any(),
         };
         view! { {main}{note.map(|n| view! { <small class=class>{n}</small> })} }
@@ -178,14 +160,16 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
         })
     });
     let leave = j.leave;
+    let go_class = RwSignal::new("jd-go");
     let go = move || {
         let t = at.get();
-        let gone = first.as_ref().is_some_and(|(dep, trip, stop)| {
-            let delay = delays.with(|d| d.at(trip, stop)).unwrap_or(0);
-            // Stejná tolerance jako na tabuli: pár sekund po odjezdu ještě „stihnete“.
-            *dep + Duration::seconds(i64::from(delay)) < t
-        });
-        go_text(leave, t, gone)
+        let (dep, delay) = match first.as_ref() {
+            Some((dep, trip, stop)) => (Some(*dep), delays.with(|d| d.at(trip, stop))),
+            None => (None, None),
+        };
+        let status = go_status(leave, dep, delay, t);
+        go_class.set(if status == GoStatus::Gone { "jd-go gone" } else { "jd-go" });
+        status.text()
     };
 
     let mut rows: Vec<AnyView> = Vec::new();
@@ -290,35 +274,8 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
                 <button class="link" on:click=move |_| on_close.run(())>"Zpět"</button>
             </div>
             <div class="jd-meta">{meta}</div>
-            <div class="jd-go">{go}</div>
+            <div class=move || go_class.get()>{go}</div>
             <div class="jd-line">{rows}</div>
         </section>
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono::TimeZone;
-    use pid_core::time::TZ;
-
-    fn t(h: u32, m: u32, s: u32) -> DateTime<Tz> {
-        TZ.with_ymd_and_hms(2026, 11, 16, h, m, s).unwrap()
-    }
-
-    #[test]
-    fn go_texts() {
-        assert_eq!(go_text(t(8, 0, 0), t(7, 58, 0), false), "Vyrazte do 2 min");
-        assert_eq!(go_text(t(8, 0, 0), t(7, 58, 30), false), "Vyrazte do 2 min");
-        assert_eq!(go_text(t(8, 0, 0), t(8, 0, 0), false), "Vyrazte hned");
-        assert_eq!(go_text(t(8, 0, 0), t(8, 5, 0), false), "Vyrazte hned");
-        assert_eq!(go_text(t(8, 0, 0), t(7, 0, 0), true), "Ujelo");
-    }
-
-    #[test]
-    fn stops_plural() {
-        assert_eq!(stops_text(1), "1 zastávka");
-        assert_eq!(stops_text(3), "3 zastávky");
-        assert_eq!(stops_text(6), "6 zastávek");
     }
 }
