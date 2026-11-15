@@ -101,13 +101,15 @@ pub trait DepartureSource {
 pub struct TimetableIndex {
     pub tt: Timetable,
     /// stop → [(pattern, pozice v patternu)]
-    stop_patterns: Vec<Vec<(u32, u32)>>,
+    pub(crate) stop_patterns: Vec<Vec<(u32, u32)>>,
     /// pattern → [profile]
-    pattern_profiles: Vec<Vec<u32>>,
+    pub(crate) pattern_profiles: Vec<Vec<u32>>,
     /// profile → rozsah v `tt.trips` (trips jsou seřazené podle (profile, start))
-    profile_trips: Vec<(usize, usize)>,
+    pub(crate) profile_trips: Vec<(usize, usize)>,
     group_names_folded: Vec<String>,
     group_has_metro: Vec<bool>,
+    /// Staví na stanovišti některý pattern metra?
+    metro_stop: Vec<bool>,
 }
 
 impl TimetableIndex {
@@ -135,12 +137,27 @@ impl TimetableIndex {
         }
         let group_names_folded = tt.groups.iter().map(|g| fold(tt.string(g.name))).collect();
         let mut group_has_metro = vec![false; tt.groups.len()];
+        let mut metro_stop = vec![false; tt.stops.len()];
         for pattern in tt.patterns.iter().filter(|p| tt.routes[p.route as usize].route_type == 1) {
             for &stop in &pattern.stops {
                 group_has_metro[tt.stops[stop as usize].group as usize] = true;
+                metro_stop[stop as usize] = true;
             }
         }
-        TimetableIndex { tt, stop_patterns, pattern_profiles, profile_trips, group_names_folded, group_has_metro }
+        TimetableIndex {
+            tt,
+            stop_patterns,
+            pattern_profiles,
+            profile_trips,
+            group_names_folded,
+            group_has_metro,
+            metro_stop,
+        }
+    }
+
+    /// Je stanoviště nástupištěm metra (staví na něm některý pattern metra)?
+    pub fn is_metro_stop(&self, stop: u32) -> bool {
+        self.metro_stop[stop as usize]
     }
 
     fn stop_coords(&self, stop: u32) -> (f64, f64) {

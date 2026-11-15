@@ -2,6 +2,7 @@
 
 pub mod codec;
 pub mod query;
+pub mod router;
 pub mod walk;
 
 use chrono::NaiveDate;
