@@ -40,14 +40,13 @@ pub fn Stats() -> impl IntoView {
             }
         };
         let q = StatsQuery { period: period.get(), persons };
-        // „Oba“ = jeden souhrnný blok, ostatní volby jedna osoba
+        // „Oba“ = jeden souhrnný blok, ostatní volby jedna osoba; příznak jde i do klíče <For>.
         if who.get() == Who::Both {
-            vec![state.rides.with(|rs| compute_combined(rs, &q))]
+            vec![(true, state.rides.with(|rs| compute_combined(rs, &q)))]
         } else {
-            state.rides.with(|rs| compute(rs, &q))
+            state.rides.with(|rs| compute(rs, &q)).into_iter().map(|p| (false, p)).collect::<Vec<_>>()
         }
     });
-    let both = move || who.get() == Who::Both;
     let set_kind = move |k: PeriodKind| period.set(Period::containing(k, now().date_naive()));
 
     view! {
@@ -83,8 +82,9 @@ pub fn Stats() -> impl IntoView {
                 <button class:selected=move || who.get() == Who::Both on:click=move |_| who.set(Who::Both)>"Oba"</button>
             </div>
             <div class="stats-grid">
-                <For each=move || result.get() key=|p| (p.person.clone(), p.rides, p.minutes, p.series.len()) let:ps>
-                    {if both() {
+                <For each=move || result.get() key=|(both, p)| (*both, p.person.clone(), p.rides, p.minutes, p.series.len()) let:item>
+                    {let (both, ps) = item;
+                    if both {
                         view! { <PersonCard stats=ps title="Oba".to_string() /> }.into_any()
                     } else {
                         view! { <PersonCard stats=ps /> }.into_any()

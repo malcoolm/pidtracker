@@ -204,6 +204,8 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
         if selected_group.get_untracked().is_none()
             && stop_text.get_untracked().trim().is_empty()
             && let Some(first) = candidates.get().first() {
+                // Okno tabule od teď, ne od otevření obrazovky (čekání na polohu).
+                at.set(now());
                 selected_group.set(Some(first.group));
             }
     });
@@ -222,11 +224,6 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
         })
     });
     let selected_key = Signal::derive(move || selected_row.with(|r| r.as_ref().map(row_key)));
-    // Zvolený spoj, který už v seznamech není – ukáže se nahoře, ať je výběr vidět.
-    let vanished = Memo::new(move |_| {
-        let sel = selected_row.get()?;
-        rows.with(|(up, recent)| up.iter().chain(recent).all(|r| row_key(r) != row_key(&sel)).then_some(sel))
-    });
     // Ručně jen při změně „žádné odjezdy“ ↔ „jsou odjezdy“, ne při každém obnovení tabule.
     Effect::new(move |was_empty: Option<bool>| {
         let empty = rows.with(|(up, recent)| up.is_empty() && recent.is_empty());
@@ -372,11 +369,18 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             <h3>"Linka"</h3>
             <div class="list">
                 {move || {
+                    // `rows` se musí číst přímo a dřív než `selected_row` (který na `rows` závisí):
+                    // při kontrole zdrojů efektu se jinak `rows` přepočítá přes memo cestou
+                    // a efekt ho pak vidí jako čistý → seznam by se nepřekreslil.
                     let t = at.get();
-                    vanished
+                    let (up, recent) = rows.get();
+                    // Zvolený spoj, který už v seznamech není – ukáže se nahoře, ať je výběr vidět.
+                    let vanished = selected_row
                         .get()
+                        .filter(|s| up.iter().chain(&recent).all(|r| row_key(r) != row_key(s)));
+                    vanished
                         .into_iter()
-                        .chain(rows.get().0)
+                        .chain(up)
                         .map(|r| view! { <DepRow row=r at=t choice=choice selected=selected_key detail=detail /> })
                         .collect_view()
                 }}
@@ -426,7 +430,8 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             </div>
         {move || detail.get().map(|row| {
             let close = Callback::new(move |_| detail.set(None));
-            match crate::alerts::route_alert(state, &row.dep.route_id) {
+            // Bez sledování: obnova mimořádností nesmí detail přestavět (sbalení, nové stahování).
+            match untrack(|| crate::alerts::route_alert(state, &row.dep.route_id)) {
                 Some(a) => view! { <TripDetail alert=a row=row delays=delays on_close=close /> }.into_any(),
                 None => view! { <TripDetail row=row delays=delays on_close=close /> }.into_any(),
             }
