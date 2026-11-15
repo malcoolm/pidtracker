@@ -142,22 +142,22 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
       **📍 Moje poloha**, do pole „Kam“ napište cíl (např. „Letňany“) a vyberte ho z nabídky.
 - [ ] Klepněte na **Hledat** a změřte čas do zobrazení výsledků: _____ ms (cíl pod 300 ms,
       přijatelné do ~1 s). Seznam ukazuje odjezd → příjezd, dobu, přestupy a první řádek
-      „Vyrazte do HH:MM“ nebo „Vyrazte hned“.
-- [ ] Spojení začíná řádkem „📍 Moje poloha · 🚶 N min na zastávku …“.
+      „Vyrazte do N min“ nebo „Vyrazte hned“.
+- [ ] V detailu spojení je první řádek „📍 Moje poloha“ a pod ním „🚶 N min na zastávku <název>“.
 
 **Hledání ze zvolené zastávky a příjezd**
 
 - [ ] Do „Odkud“ napište zastávku ručně (ne polohu) a vyberte ji. Najde se spojení do cíle.
-- [ ] Přepněte na **Příjezd**, zvolte čas a hledejte: všechna spojení přijedou do zvoleného času
+- [ ] Přepněte na **Příjezd** (vedle „Odjezd“), v poli data a času zvolte čas (tlačítko „teď“ ho smaže) a hledejte: všechna spojení přijedou do zvoleného času
       nebo dřív.
-- [ ] Tlačítko pro dřívější/pozdější spojení doplní seznam a nic se neduplikuje.
+- [ ] Tlačítka „Dřívější spojení ↑“ (nad seznamem) a „Další spojení ↓“ (pod ním) doplní seznam a nic se neduplikuje.
 
 **Nastavení hledání**
 
-- [ ] V Nastavení vyloučte druh dopravy (např. autobus), hledejte: výsledky ho neobsahují.
+- [ ] Na obrazovce hledání zaškrtněte u „Vyloučit:“ druh dopravy (např. autobus), hledejte: výsledky ho neobsahují.
       Zavřete a znovu otevřete aplikaci: vyloučení se pamatuje.
-- [ ] Změňte **Rezervu na cestu** (např. z 2 na 5 min): v hledání se „Vyrazte do“ posune
-      o rozdíl dřív.
+- [ ] V Nastavení → „Vyhledávání spojení“ změňte „Rezerva před prvním nástupem“ (např. z 2 na 5 min): „Vyrazte do N min“ se zkrátí
+      o rozdíl.
 
 **Detail spojení**
 
@@ -170,7 +170,7 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
 
 **Pozdní večer**
 
-- [ ] Po 22:00 vyhledejte spojení (čas změřte jako výše): _____ ms. Zobrazí se noční
+- [ ] Po 22:00 vyhledejte spojení (čas změřte jako výše): _____ ms (na desktopu v Chrome naměřeno ~115 ms, cíl na iPhonu pod 300 ms, přijatelné do ~1 s). Zobrazí se noční
       linky, nebo srozumitelná zpráva, že nic nejede; aplikace nespadne.
 
 **Offline**
