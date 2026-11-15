@@ -152,8 +152,9 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
       i detail začínají chůzí z polohy (detail: „📍 Moje poloha“, „🚶 N min na zastávku …“)
       a všechna spojení odjíždějí z vybrané zastávky. „Všechny zastávky v okolí“ výběr zruší.
 - [ ] Nechte aplikaci na obrazovce hledání v pozadí, přejděte jinam (aspoň 2 min, ideálně
-      pár set metrů) a vraťte se: po chvíli „zjišťuji…“ se hledá z nové polohy (souhrn nad
-      výsledky i chůze odpovídá novému místu).
+      pár set metrů) a vraťte se: po chvíli „zjišťuji…“ se poloha obnoví. Staré výsledky
+      zůstanou, dokud znovu neklepnete na **Hledat**; pak souhrn nad výsledky i chůze
+      odpovídá novému místu.
 - [ ] Zakažte aplikaci polohu (Nastavení → Soukromí → Polohové služby) a otevřete hledání:
       pole „Odkud“ je výběr zastávky s hláškou a odkazem „📍 Zkusit znovu zjistit polohu“.
       Polohu znovu povolte a klepněte na odkaz: pole se vrátí na „📍 Moje poloha“.
@@ -162,7 +163,7 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
 
 - [ ] Klepněte na **📍 Moje poloha** → „Jiná zastávka…“, do „Odkud“ napište zastávku (např.
       „Anděl“) a vyberte ji. Najde se spojení do cíle. Karta začíná odjezdem prvního spoje:
-      „8:00 → 8:21“ a pod tím „Anděl odj. 8:00“ (čas vlevo = čas odjezdu, ne o rezervu dřív).
+      „08:00 → 08:21“ a pod tím „Anděl odj. 08:00“ (čas vlevo = čas odjezdu, ne o rezervu dřív).
 - [ ] Přepněte na **Příjezd** (vedle „Odjezd“), v poli data a času zvolte čas (tlačítko „teď“ ho smaže) a hledejte: všechna spojení přijedou do zvoleného času
       nebo dřív.
 - [ ] Tlačítka „Dřívější spojení ↑“ (nad seznamem) a „Další spojení ↓“ (pod ním) doplní seznam a nic se neduplikuje.
