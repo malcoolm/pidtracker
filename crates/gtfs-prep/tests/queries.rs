@@ -272,3 +272,66 @@ fn night_trip_stops_after_midnight() {
     assert_eq!(times, vec!["00:10", "00:12", "00:15"]);
     assert!(r.stops.iter().all(|s| s.time.format("%Y-%m-%d").to_string() == "2026-11-01"));
 }
+
+fn mini_plan(ix: &TimetableIndex) -> Vec<pid_core::timetable::router::Journey> {
+    use pid_core::timetable::router::{JourneyQuery, TimeMode};
+    let q = JourneyQuery {
+        origins: ix.access_group(group(ix, "Muzeum")),
+        target_group: group(ix, "Jana Masaryka"),
+        mode: TimeMode::DepartAt,
+        time: prague(2026, 10, 26, 7, 55),
+        excluded: Vec::new(),
+        buffer_s: 0,
+    };
+    ix.plan(&q, 1)
+}
+
+/// Jízdy spojení jako (spoj, nástup, výstup, odjezd, příjezd).
+fn plan_rides(ix: &TimetableIndex, j: &pid_core::timetable::router::Journey) -> Vec<(String, String, String, String, String)> {
+    use pid_core::timetable::router::Leg;
+    j.legs
+        .iter()
+        .filter_map(|l| match *l {
+            Leg::Ride { trip, board_stop, alight_stop, dep, arr, .. } => Some((
+                ix.tt.trips[trip as usize].gtfs_id.clone(),
+                ix.tt.stop_name(board_stop).to_string(),
+                ix.tt.stop_name(alight_stop).to_string(),
+                dep.format("%H:%M").to_string(),
+                arr.format("%H:%M").to_string(),
+            )),
+            Leg::Walk { .. } => None,
+        })
+        .collect()
+}
+
+#[test]
+fn plan_on_mini_feed() {
+    // Bez pěších přestupů mezi uzly: metro A Muzeum 8:03 → Náměstí Míru 8:05, tram 22 v 8:10.
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mini");
+    let mut tt = build_timetable(&dir, Utc.with_ymd_and_hms(2026, 10, 25, 12, 0, 0).unwrap()).unwrap();
+    tt.footpaths.iter_mut().for_each(Vec::clear);
+    let ix = TimetableIndex::new(tt);
+    let js = mini_plan(&ix);
+    assert_eq!(js.len(), 1, "{js:#?}");
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        plan_rides(&ix, &js[0]),
+        vec![
+            (s("TA1"), s("Muzeum"), s("Náměstí Míru"), s("08:03"), s("08:05")),
+            (s("T22c"), s("Náměstí Míru"), s("Jana Masaryka"), s("08:10"), s("08:12")),
+        ]
+    );
+    assert_eq!(js[0].transfers, 1);
+    assert_eq!(js[0].arrive, prague(2026, 10, 26, 8, 12));
+}
+
+#[test]
+fn plan_on_mini_feed_walks_when_faster() {
+    // S footpaths je pěšky z Náměstí Míru (368 s) rychlejší než tram 22 v 8:10 → přestup se skryje.
+    let ix = index();
+    let js = mini_plan(&ix);
+    assert_eq!(js.len(), 1, "{js:#?}");
+    assert_eq!(plan_rides(&ix, &js[0])[0].0, "TA1");
+    assert_eq!(js[0].transfers, 0);
+    assert_eq!(js[0].arrive, TZ.with_ymd_and_hms(2026, 10, 26, 8, 11, 8).unwrap());
+}

@@ -1,6 +1,6 @@
 //! Geografické výpočty.
 
-const EARTH_RADIUS_M: f64 = 6_371_000.0;
+pub(crate) const EARTH_RADIUS_M: f64 = 6_371_000.0;
 
 /// Vzdálenost dvou bodů po povrchu Země v metrech.
 pub fn haversine_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {

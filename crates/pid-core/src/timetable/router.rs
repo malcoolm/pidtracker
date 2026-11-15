@@ -4,9 +4,8 @@ use chrono::{DateTime, Duration, NaiveDate};
 use chrono_tz::Tz;
 
 use super::query::TimetableIndex;
-use super::walk::{MAX_TRANSFERS, METRO_ACCESS_EXTRA_S, transfer_seconds, walk_seconds};
+use super::walk::{ACCESS_MAX_M, MAX_TRANSFERS, METRO_ACCESS_EXTRA_S, transfer_seconds, walk_seconds};
 use super::{NO_DROP_OFF, NO_PICKUP};
-use crate::geo::haversine_m;
 use crate::ride::RouteKind;
 use crate::time::gtfs_instant;
 
@@ -62,6 +61,12 @@ impl TimetableIndex {
     /// Jedno hledání: Pareto množina spojení (nejlepší čas pro každý počet přestupů
     /// 0..=`MAX_TRANSFERS`, jen zlepšující se), seřazená podle počtu přestupů.
     pub fn plan_once(&self, q: &JourneyQuery) -> Vec<Journey> {
+        self.plan_once_with(q, &DayFilter::new(self, q.time.date_naive()))
+    }
+
+    /// `plan_once` s předpočítaným předfiltrem dnů (musí patřit ke dni `q.time`).
+    fn plan_once_with(&self, q: &JourneyQuery, filter: &DayFilter) -> Vec<Journey> {
+        debug_assert_eq!(filter.date, q.time.date_naive());
         let origins = self.origin_ends(q);
         if origins.is_empty() {
             return Vec::new();
@@ -69,12 +74,153 @@ impl TimetableIndex {
         let targets = self.target_ends(q.target_group);
         let fwd = q.mode == TimeMode::DepartAt;
         let (sources, sinks) = if fwd { (origins, targets) } else { (targets, origins) };
-        let mut r = Raptor::new(self, q, fwd, sources, sinks);
+        let mut r = Raptor::new(self, q, filter, fwd, sources, sinks);
         let start = q.time.timestamp();
         r.run(if fwd { start } else { -start });
         (1..=ROUNDS)
             .filter_map(|k| r.found[k].map(|sink| r.journey(q, &r.steps(k, sink))))
             .collect()
+    }
+
+    /// Stanoviště uzlů do `ACCESS_MAX_M` od bodu, každé se svým `walk_seconds`.
+    /// Stačí, aby do limitu bylo jedno stanoviště uzlu; přidají se všechna jeho stanoviště.
+    pub fn access_from(&self, lat: f64, lon: f64) -> Vec<Access> {
+        let stops = &self.tt.stops;
+        let dist: Vec<f64> = (0..stops.len()).map(|i| self.stop_distance(i as u32, lat, lon)).collect();
+        let mut near = vec![false; self.tt.groups.len()];
+        for (s, &d) in stops.iter().zip(&dist) {
+            if d <= ACCESS_MAX_M {
+                near[s.group as usize] = true;
+            }
+        }
+        stops
+            .iter()
+            .zip(&dist)
+            .enumerate()
+            .filter(|(_, (s, _))| near[s.group as usize])
+            .map(|(i, (_, &d))| Access { stop: i as u32, walk_s: walk_seconds(d) })
+            .collect()
+    }
+
+    /// Všechna stanoviště uzlu s `walk_s = 0`.
+    pub fn access_group(&self, group: u32) -> Vec<Access> {
+        self.tt.groups[group as usize].stops.iter().map(|&stop| Access { stop, walk_s: 0 }).collect()
+    }
+
+    /// 3–5 spojení (min. `min_count`), seřazená podle `leave`. Opakuje `plan_once`
+    /// s časem posunutým za nejdřívější odchod (u příjezdu do: před nejpozdější příjezd)
+    /// předchozího běhu, každé spojení utáhne, slučuje duplicity a skrývá dominovaná.
+    /// Při přebytku vrací u odjezdu nejdřívější, u příjezdu do nejpozdější spojení
+    /// (tj. vždy ta nejblíž zadanému času).
+    pub fn plan(&self, q: &JourneyQuery, min_count: usize) -> Vec<Journey> {
+        let fwd = q.mode == TimeMode::DepartAt;
+        let mut q = q.clone();
+        let mut out: Vec<Journey> = Vec::new();
+        let mut filter = DayFilter::new(self, q.time.date_naive());
+        for _ in 0..PLAN_MAX_RUNS {
+            if filter.date != q.time.date_naive() {
+                filter = DayFilter::new(self, q.time.date_naive());
+            }
+            let found = self.plan_once_with(&q, &filter);
+            // Posun se počítá z neutažených časů běhu, aby se nepřeskočila žádná spojení.
+            let next = if fwd {
+                found.iter().map(|j| j.leave).min().map(|t| t + Duration::seconds(PLAN_STEP_S))
+            } else {
+                found.iter().map(|j| j.arrive).max().map(|t| t - Duration::seconds(PLAN_STEP_S))
+            };
+            let Some(next) = next else { break };
+            for j in found {
+                merge_journey(&mut out, self.tighten(j, q.buffer_s));
+            }
+            drop_dominated(&mut out);
+            if out.len() >= min_count {
+                break;
+            }
+            q.time = next;
+        }
+        out.sort_by_key(|j| (j.leave, j.arrive, j.transfers));
+        if out.len() > PLAN_MAX_RESULTS {
+            if fwd {
+                out.truncate(PLAN_MAX_RESULTS);
+            } else {
+                out.drain(..out.len() - PLAN_MAX_RESULTS);
+            }
+        }
+        out
+    }
+
+    /// Posune dřívější spoje na nejpozdější, které stihnou stejné navazující spoje
+    /// (zpětně od posledního, který zůstává). Spoj se vyměňuje jen za spoj stejného
+    /// patternu (stejná linka i stanoviště); `leave` se přepočítá z prvního nástupu.
+    pub fn tighten(&self, mut j: Journey, buffer_s: u32) -> Journey {
+        let rides: Vec<usize> =
+            j.legs.iter().enumerate().filter(|(_, l)| matches!(l, Leg::Ride { .. })).map(|(i, _)| i).collect();
+        let Some(&first) = rides.first() else { return j };
+        for w in (0..rides.len() - 1).rev() {
+            let (i, next) = (rides[w], rides[w + 1]);
+            let Leg::Ride { dep: next_dep, board_stop: next_stop, .. } = j.legs[next] else { unreachable!() };
+            // Mezi jízdami je buď úsek chůze s už započteným přestupem, nebo nic (stejné stanoviště).
+            let walk = j.legs[i + 1..next].iter().find_map(|l| match *l {
+                Leg::Walk { seconds, .. } => Some(seconds),
+                Leg::Ride { .. } => None,
+            });
+            let Leg::Ride { trip, board_pos, alight_pos, alight_stop, dep, arr, .. } = &mut j.legs[i] else {
+                unreachable!()
+            };
+            let transfer = walk.unwrap_or_else(|| {
+                transfer_seconds(0, self.is_metro_stop(*alight_stop), self.is_metro_stop(next_stop))
+            });
+            let deadline = next_dep - Duration::seconds(i64::from(transfer));
+            if let Some((t, d, a)) = self.latest_trip(*trip, *board_pos, *alight_pos, *dep, deadline) {
+                (*trip, *dep, *arr) = (t, d, a);
+            }
+        }
+        let Leg::Ride { board_stop, dep, .. } = j.legs[first] else { unreachable!() };
+        let access = match j.legs.first() {
+            Some(&Leg::Walk { from: None, seconds, .. }) => seconds,
+            _ => 0,
+        };
+        j.leave = dep - Duration::seconds(i64::from(self.access_extra(board_stop, access, buffer_s)));
+        j
+    }
+
+    /// Spoj stejného patternu jako `trip` s nejpozdějším odjezdem z `board_pos`
+    /// (později než `after`), který na `alight_pos` přijede nejpozději v `deadline`.
+    /// Vrací (spoj, odjezd, příjezd).
+    fn latest_trip(
+        &self,
+        trip: u32,
+        board_pos: u16,
+        alight_pos: u16,
+        after: DateTime<Tz>,
+        deadline: DateTime<Tz>,
+    ) -> Option<(u32, DateTime<Tz>, DateTime<Tz>)> {
+        let tt = &self.tt;
+        let pattern = tt.profiles[tt.trips[trip as usize].profile as usize].pattern;
+        let deadline = deadline.timestamp();
+        let mut best_dep = after.timestamp();
+        // (spoj, servisní den, start + offset nástupu, start + offset výstupu)
+        let mut best: Option<(u32, NaiveDate, u32, u32)> = None;
+        let d = after.date_naive();
+        for &prof in &self.pattern_profiles[pattern as usize] {
+            let offsets = &tt.profiles[prof as usize].offsets;
+            let (board, alight) = (offsets[board_pos as usize], offsets[alight_pos as usize]);
+            let (lo, hi) = self.profile_trips[prof as usize];
+            let trips = &tt.trips[lo..hi];
+            for day in [d - Duration::days(1), d, d + Duration::days(1)] {
+                let base = gtfs_instant(day, 0).timestamp();
+                let max_start = deadline - base - i64::from(alight);
+                let end = trips.partition_point(|t| i64::from(t.start) <= max_start);
+                let Some(i) = trips[..end].iter().rposition(|t| tt.service_runs(t.service, day)) else { continue };
+                let start = trips[i].start;
+                let dep = base + i64::from(start + board);
+                if dep > best_dep {
+                    best_dep = dep;
+                    best = Some(((lo + i) as u32, day, start + board, start + alight));
+                }
+            }
+        }
+        best.map(|(t, day, dep, arr)| (t, gtfs_instant(day, dep), gtfs_instant(day, arr)))
     }
 
     /// Výchozí stanoviště (mimo cílový uzel); cena navíc = chůze + rezerva (+ metro).
@@ -112,6 +258,94 @@ impl TimetableIndex {
             }
         }
         out
+    }
+}
+
+/// Štítky seznamu spojení (indexy do seznamu); může jít o totéž spojení.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Labels {
+    pub fastest: Option<usize>,
+    pub fewest: Option<usize>,
+}
+
+/// „Nejrychlejší“ = nejkratší `arrive − leave`; „nejméně přestupů“ = nejméně
+/// přestupů, při shodě dřívější příjezd.
+pub fn labels(js: &[Journey]) -> Labels {
+    let fastest = js.iter().enumerate().min_by_key(|(_, j)| j.arrive - j.leave).map(|(i, _)| i);
+    let fewest = js.iter().enumerate().min_by_key(|(_, j)| (j.transfers, j.arrive)).map(|(i, _)| i);
+    Labels { fastest, fewest }
+}
+
+/// Nejvyšší počet běhů `plan_once` v jednom `plan`.
+const PLAN_MAX_RUNS: usize = 8;
+/// Nejvyšší počet vrácených spojení.
+const PLAN_MAX_RESULTS: usize = 5;
+/// Posun času dalšího běhu za předchozí výsledek.
+const PLAN_STEP_S: i64 = 60;
+
+fn trip_seq(j: &Journey) -> impl Iterator<Item = u32> + '_ {
+    j.legs.iter().filter_map(|l| match *l {
+        Leg::Ride { trip, .. } => Some(trip),
+        Leg::Walk { .. } => None,
+    })
+}
+
+/// Přidá spojení; duplicitu (stejná posloupnost spojů) sloučí – zůstane to s pozdějším
+/// odchodem, při shodě s dřívějším příjezdem.
+fn merge_journey(out: &mut Vec<Journey>, j: Journey) {
+    match out.iter_mut().find(|o| trip_seq(o).eq(trip_seq(&j))) {
+        Some(o) => {
+            if (j.leave, std::cmp::Reverse(j.arrive)) > (o.leave, std::cmp::Reverse(o.arrive)) {
+                *o = j;
+            }
+        }
+        None => out.push(j),
+    }
+}
+
+/// `a` dominuje `b`: odchází stejně nebo později, přijíždí stejně nebo dřív,
+/// nejvýš stejně přestupů a aspoň v jednom ostře lépe.
+fn dominates(a: &Journey, b: &Journey) -> bool {
+    a.leave >= b.leave
+        && a.arrive <= b.arrive
+        && a.transfers <= b.transfers
+        && (a.leave > b.leave || a.arrive < b.arrive || a.transfers < b.transfers)
+}
+
+fn drop_dominated(out: &mut Vec<Journey>) {
+    let keep: Vec<bool> = out.iter().map(|b| !out.iter().any(|a| dominates(a, b))).collect();
+    let mut keep = keep.into_iter();
+    out.retain(|_| keep.next().unwrap());
+}
+
+/// Předfiltr pro servisní dny D−1, D, D+1 (počítá se jednou na `plan`):
+/// ve které z nich jede která služba a které profily nejedou vůbec.
+struct DayFilter {
+    date: NaiveDate,
+    /// služba → bit i = jede v den D−1+i
+    services: Vec<u8>,
+    /// profil → jede v některém z dnů některý jeho spoj
+    profiles: Vec<bool>,
+}
+
+impl DayFilter {
+    fn new(ix: &TimetableIndex, date: NaiveDate) -> Self {
+        let tt = &ix.tt;
+        let days = [date - Duration::days(1), date, date + Duration::days(1)];
+        let services: Vec<u8> = (0..tt.services.len() as u32)
+            .map(|s| days.iter().enumerate().filter(|&(_, &d)| tt.service_runs(s, d)).fold(0, |m, (i, _)| m | 1 << i))
+            .collect();
+        let profiles = ix
+            .profile_trips
+            .iter()
+            .map(|&(lo, hi)| tt.trips[lo..hi].iter().any(|t| services[t.service as usize] != 0))
+            .collect();
+        DayFilter { date, services, profiles }
+    }
+
+    /// Jede služba v den D−1+`day`?
+    fn runs(&self, service: u32, day: usize) -> bool {
+        self.services[service as usize] & (1 << day) != 0
     }
 }
 
@@ -173,6 +407,7 @@ enum Step {
 /// zdroje jsou cílová stanoviště a cíle běhu výchozí stanoviště.
 struct Raptor<'a> {
     ix: &'a TimetableIndex,
+    filter: &'a DayFilter,
     fwd: bool,
     excluded: &'a [RouteKind],
     /// Servisní dny D−1, D, D+1 a epoch sekundy jejich GTFS půlnoci.
@@ -193,16 +428,28 @@ struct Raptor<'a> {
     /// `found[k]`: cíl běhu (index do `sinks`) s nejlepší cenou po k jízdách,
     /// jen pokud zlepšuje výsledek s méně jízdami.
     found: [Option<usize>; ROUNDS + 1],
+    /// Pracovní pole fronty v `scan_routes` (mezi koly vždy `NOT_QUEUED`).
+    queue_pos: Vec<u32>,
 }
 
+const NOT_QUEUED: u32 = u32::MAX;
+
 impl<'a> Raptor<'a> {
-    fn new(ix: &'a TimetableIndex, q: &'a JourneyQuery, fwd: bool, sources: Vec<Endpoint>, sinks: Vec<Endpoint>) -> Self {
+    fn new(
+        ix: &'a TimetableIndex,
+        q: &'a JourneyQuery,
+        filter: &'a DayFilter,
+        fwd: bool,
+        sources: Vec<Endpoint>,
+        sinks: Vec<Endpoint>,
+    ) -> Self {
         let n = ix.tt.stops.len();
         let d = q.time.date_naive();
         let days = [d - Duration::days(1), d, d + Duration::days(1)];
         let bases = days.map(|day| gtfs_instant(day, 0).timestamp());
         Raptor {
             ix,
+            filter,
             fwd,
             excluded: &q.excluded,
             days,
@@ -217,6 +464,7 @@ impl<'a> Raptor<'a> {
             ready_back: vec![vec![None; n]; ROUNDS + 1],
             best_sink: INF,
             found: [None; ROUNDS + 1],
+            queue_pos: vec![NOT_QUEUED; ix.tt.profiles.len()],
         }
     }
 
@@ -265,22 +513,33 @@ impl<'a> Raptor<'a> {
     /// Projde profily přes označená stanoviště; vrátí stanoviště se zlepšeným `arr[k]`.
     fn scan_routes(&mut self, k: usize, marked: &[u32]) -> Vec<u32> {
         let ix = self.ix;
-        // (profil, první pozice ve směru běhu)
-        let mut queue: Vec<(u32, usize)> = Vec::new();
+        let fwd = self.fwd;
+        // Fronta profilů; `queue_pos[profil]` = první pozice ve směru běhu.
+        let mut queue: Vec<u32> = Vec::new();
         for &stop in marked {
             for &(p, pos) in &ix.stop_patterns[stop as usize] {
                 if self.excluded_pattern(p) {
                     continue;
                 }
-                queue.extend(ix.pattern_profiles[p as usize].iter().map(|&prof| (prof, pos as usize)));
+                for &prof in &ix.pattern_profiles[p as usize] {
+                    if !self.filter.profiles[prof as usize] {
+                        continue;
+                    }
+                    let slot = &mut self.queue_pos[prof as usize];
+                    if *slot == NOT_QUEUED {
+                        queue.push(prof);
+                        *slot = pos;
+                    } else if (fwd && pos < *slot) || (!fwd && pos > *slot) {
+                        *slot = pos;
+                    }
+                }
             }
         }
-        let fwd = self.fwd;
-        queue.sort_unstable_by_key(|&(prof, pos)| (prof, if fwd { pos as i64 } else { -(pos as i64) }));
-        queue.dedup_by_key(|e| e.0);
+        queue.sort_unstable();
         let mut improved = Vec::new();
-        for (prof, pos) in queue {
-            self.scan_profile(k, prof, pos, &mut improved);
+        for prof in queue {
+            let pos = std::mem::replace(&mut self.queue_pos[prof as usize], NOT_QUEUED);
+            self.scan_profile(k, prof, pos as usize, &mut improved);
         }
         improved.sort_unstable();
         improved.dedup();
@@ -325,28 +584,34 @@ impl<'a> Raptor<'a> {
 
     /// Nejlepší spoj profilu, který na pozici `pos` stihneme s cenou ≥ `ready`
     /// (dopředu nejdřívější odjezd, zpětně nejpozdější příjezd) přes dny D−1, D, D+1.
+    /// Spoje s cenou ≥ `best_sink` se nehledají (nemohou nic zlepšit).
     fn catch_trip(&self, prof: u32, pos: usize, ready: i64) -> Option<(u32, u8, i64)> {
         let tt = &self.ix.tt;
         let (lo, hi) = self.ix.profile_trips[prof as usize];
         let trips = &tt.trips[lo..hi];
+        let (Some(first), Some(last)) = (trips.first(), trips.last()) else { return None };
         let offset = i64::from(tt.profiles[prof as usize].offsets[pos]);
         let mut best: Option<(u32, u8, i64)> = None;
-        for (d, (&date, &base)) in self.days.iter().zip(&self.bases).enumerate() {
-            let runs = |t: &super::Trip| tt.service_runs(t.service, date);
-            let idx = if self.fwd {
-                let min_start = ready - base - offset;
-                let first = trips.partition_point(|t| i64::from(t.start) < min_start);
-                trips[first..].iter().position(runs).map(|i| first + i)
+        // Den D napřed: jeho spoj obvykle vyhraje a ostatní dny se pak rychle odříznou.
+        for d in [1, 0, 2] {
+            let base = self.bases[d] + offset;
+            let limit = best.map_or(self.best_sink, |b| b.2.min(self.best_sink));
+            let cost = |t: &super::Trip| self.cost(base + i64::from(t.start));
+            // Ceny spojů dne d leží mezi cenami prvního a posledního spoje profilu.
+            let (lo_cost, hi_cost) = if self.fwd { (cost(first), cost(last)) } else { (cost(last), cost(first)) };
+            if hi_cost < ready || lo_cost.max(ready) >= limit {
+                continue;
+            }
+            let runs = |t: &super::Trip| self.filter.runs(t.service, d);
+            let found = if self.fwd {
+                let from = trips.partition_point(|t| base + i64::from(t.start) < ready);
+                trips[from..].iter().take_while(|t| cost(t) < limit).position(runs).map(|i| from + i)
             } else {
-                let max_start = -ready - base - offset;
-                let end = trips.partition_point(|t| i64::from(t.start) <= max_start);
-                trips[..end].iter().rposition(runs)
+                let to = trips.partition_point(|t| base + i64::from(t.start) <= -ready);
+                trips[..to].iter().rev().take_while(|t| cost(t) < limit).position(runs).map(|i| to - 1 - i)
             };
-            let Some(i) = idx else { continue };
-            let trip = (lo + i) as u32;
-            let cost = self.trip_cost(trip, d as u8, pos);
-            if best.is_none_or(|b| cost < b.2) {
-                best = Some((trip, d as u8, cost));
+            if let Some(i) = found {
+                best = Some(((lo + i) as u32, d as u8, cost(&trips[i])));
             }
         }
         best
@@ -376,7 +641,7 @@ impl<'a> Raptor<'a> {
             let m = ix.is_metro_stop(from);
             let group = &ix.tt.groups[ix.group_of_stop(from) as usize].stops;
             let in_group = group.iter().map(|&to| {
-                let walk = if to == from { 0 } else { walk_seconds(stop_distance_m(ix, from, to)) };
+                let walk = if to == from { 0 } else { walk_seconds(ix.stop_distance_m(from, to)) };
                 (to, walk)
             });
             // Footpaths jsou symetrické, zpětný běh je tedy může použít obráceně.
@@ -497,12 +762,6 @@ impl<'a> Raptor<'a> {
             .sum();
         Journey { leave, arrive, transfers: (rides.len() - 1) as u8, walk_s, legs }
     }
-}
-
-fn stop_distance_m(ix: &TimetableIndex, a: u32, b: u32) -> f64 {
-    let (sa, sb) = (&ix.tt.stops[a as usize], &ix.tt.stops[b as usize]);
-    let deg = |e6: i32| f64::from(e6) / 1e6;
-    haversine_m(deg(sa.lat_e6), deg(sa.lon_e6), deg(sb.lat_e6), deg(sb.lon_e6))
 }
 
 #[cfg(test)]
@@ -763,6 +1022,133 @@ mod tests {
         assert_eq!(back.len(), 1);
         assert_eq!((back[0].leave, back[0].arrive), (t(8, 0), t(8, 43)));
         assert_eq!(back[0].legs, j.legs);
+    }
+
+    /// Varianta sítě s vlastními odjezdy tramvaje (ze S1) a metra (z H2).
+    fn with_trips(trams: &[u32], metros: &[u32]) -> TimetableIndex {
+        let mut tt = timetable();
+        tt.trips = trams.iter().map(|&s| trip(0, s)).chain(metros.iter().map(|&s| trip(1, s))).collect();
+        TimetableIndex::new(tt)
+    }
+
+    /// Bez metra 8:08 a 8:10, s druhou tramvají 8:02 (H1 8:07).
+    fn tight_net() -> TimetableIndex {
+        with_trips(&[hm(8, 0), hm(8, 2)], &[hm(8, 20)])
+    }
+
+    fn trips_of(j: &Journey) -> Vec<u32> {
+        j.legs
+            .iter()
+            .filter_map(|l| match *l {
+                Leg::Ride { trip, .. } => Some(trip),
+                Leg::Walk { .. } => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn tighten_moves_first_ride_later() {
+        let ix = tight_net();
+        let js = ix.plan_once(&query(t(7, 55)));
+        let j = js.into_iter().find(|j| j.transfers == 1).unwrap();
+        assert_eq!(rides(&j), vec![(S1, H1, t(8, 0), t(8, 5)), (H2, T2, t(8, 20), t(8, 30))]);
+        let tight = ix.tighten(j, 0);
+        assert_eq!(rides(&tight), vec![(S1, H1, t(8, 2), t(8, 7)), (H2, T2, t(8, 20), t(8, 30))]);
+        assert_eq!((tight.leave, tight.arrive, tight.transfers), (t(8, 2), t(8, 30), 1));
+        assert_eq!(tight.legs[1], Leg::Walk { from: Some(H1), to: H2, seconds: 240 });
+    }
+
+    #[test]
+    fn plan_drops_dominated() {
+        let js = tight_net().plan(&query(t(7, 55)), 3);
+        let with_metro: Vec<_> = js.iter().filter(|j| rides(j).iter().any(|r| r.2 == t(8, 20))).collect();
+        assert_eq!(with_metro.len(), 1, "{js:#?}");
+        assert_eq!(rides(with_metro[0])[0].2, t(8, 2));
+        assert_eq!(with_metro[0].leave, t(8, 2));
+    }
+
+    #[test]
+    fn plan_returns_at_least_three() {
+        let ix = with_trips(
+            &[hm(7, 40), hm(7, 50), hm(8, 0)],
+            &[hm(7, 50), hm(8, 0), hm(8, 10), hm(8, 20), hm(8, 30)],
+        );
+        let js = ix.plan(&query(t(7, 30)), 3);
+        assert!((3..=5).contains(&js.len()), "{js:#?}");
+        assert!(js.windows(2).all(|w| w[0].leave <= w[1].leave));
+        let mut seqs: Vec<_> = js.iter().map(trips_of).collect();
+        seqs.sort();
+        seqs.dedup();
+        assert_eq!(seqs.len(), js.len());
+    }
+
+    #[test]
+    fn plan_arrive_by_lists_latest() {
+        let ix = with_trips(
+            &[hm(7, 40), hm(7, 50), hm(8, 0)],
+            &[hm(7, 50), hm(8, 0), hm(8, 10), hm(8, 20), hm(8, 30)],
+        );
+        let mut q = query(t(8, 45));
+        q.mode = TimeMode::ArriveBy;
+        let js = ix.plan(&q, 3);
+        assert!((3..=5).contains(&js.len()), "{js:#?}");
+        assert!(js.windows(2).all(|w| w[0].leave <= w[1].leave));
+        assert!(js.iter().all(|j| j.arrive <= t(8, 45)));
+        // Nejpozdější odchod: tram 8:00 → metro 8:10 (příjezd 8:20) i přímý tram 8:00 (8:40).
+        assert_eq!(js.last().unwrap().leave, t(8, 0));
+    }
+
+    #[test]
+    fn labels_fastest_and_fewest() {
+        let js = net().plan_once(&query(t(7, 55)));
+        let l = labels(&js);
+        assert_eq!(js[l.fastest.unwrap()].transfers, 1);
+        assert_eq!(js[l.fewest.unwrap()].transfers, 0);
+        assert_eq!(labels(&[]), Labels { fastest: None, fewest: None });
+    }
+
+    /// Bod `m` metrů severně od S1.
+    fn north_of_s1(m: f64) -> (f64, f64) {
+        (50.10 + (m / crate::geo::EARTH_RADIUS_M).to_degrees(), 14.40)
+    }
+
+    #[test]
+    fn access_from_within_1500m() {
+        let ix = net();
+        // O kousek blíž než 1 400 m, aby zaokrouhlení vzdálenosti nepřelezlo celou sekundu.
+        let (lat, lon) = north_of_s1(1399.99);
+        assert_eq!(ix.access_from(lat, lon), vec![Access { stop: S1, walk_s: walk_seconds(1400.0) }]);
+        let (lat, lon) = north_of_s1(1600.0);
+        assert!(ix.access_from(lat, lon).iter().all(|a| a.stop != S1));
+    }
+
+    #[test]
+    fn access_group_lists_all_stops() {
+        assert_eq!(net().access_group(1), vec![Access { stop: H1, walk_s: 0 }, Access { stop: H2, walk_s: 0 }]);
+    }
+
+    #[test]
+    fn metro_access_extra() {
+        let ix = net();
+        let first_wait = |stop| {
+            let mut q = query(t(7, 50));
+            q.origins = vec![Access { stop, walk_s: 300 }];
+            let js = ix.plan_once(&q);
+            let j = &js[0];
+            (rides(j)[0].2 - j.leave).num_seconds()
+        };
+        assert_eq!(first_wait(H1), 300);
+        assert_eq!(first_wait(H2), 300 + 120);
+    }
+
+    #[test]
+    fn arrive_by_respects_no_dropoff() {
+        let mut tt = timetable();
+        tt.patterns[TRAM_PATTERN].flags[2] = NO_DROP_OFF;
+        tt.patterns[1].flags[1] = NO_DROP_OFF;
+        let mut q = query(t(8, 35));
+        q.mode = TimeMode::ArriveBy;
+        assert!(TimetableIndex::new(tt).plan_once(&q).is_empty());
     }
 
     #[test]

@@ -165,9 +165,15 @@ impl TimetableIndex {
         (s.lat_e6 as f64 / 1e6, s.lon_e6 as f64 / 1e6)
     }
 
-    fn stop_distance(&self, stop: u32, lat: f64, lon: f64) -> f64 {
+    pub(crate) fn stop_distance(&self, stop: u32, lat: f64, lon: f64) -> f64 {
         let (slat, slon) = self.stop_coords(stop);
         haversine_m(lat, lon, slat, slon)
+    }
+
+    /// Vzdušná vzdálenost dvou stanovišť v metrech.
+    pub(crate) fn stop_distance_m(&self, a: u32, b: u32) -> f64 {
+        let (lat, lon) = self.stop_coords(b);
+        self.stop_distance(a, lat, lon)
     }
 
     fn group_ref(&self, group: u32, distance_m: f64) -> NearbyGroup {
