@@ -59,8 +59,22 @@ pub struct StopTimeEvent {
 pub struct VehiclePosition {
     #[prost(message, optional, tag = "1")]
     pub trip: Option<TripDescriptor>,
+    #[prost(message, optional, tag = "2")]
+    pub position: Option<Position>,
+    #[prost(uint32, optional, tag = "3")]
+    pub current_stop_sequence: Option<u32>,
+    #[prost(uint64, optional, tag = "5")]
+    pub timestamp: Option<u64>,
     #[prost(message, optional, tag = "8")]
     pub vehicle: Option<VehicleDescriptor>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct Position {
+    #[prost(float, tag = "1")]
+    pub latitude: f32,
+    #[prost(float, tag = "2")]
+    pub longitude: f32,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -77,6 +91,19 @@ pub struct VehicleDescriptor {
     pub label: Option<String>,
 }
 
+/// Evidenční číslo vozu z popisu vozidla: `label`, jinak přípona `service-<x>-<číslo>`.
+fn vehicle_label(v: VehicleDescriptor) -> Option<String> {
+    v.label
+        .filter(|l| !l.trim().is_empty())
+        // Jen `service-<x>-<číslo vozu>`; `metro-…` (pořadí soupravy) a `train-…` (číslo vlaku) nejsou čísla vozů.
+        .or_else(|| {
+            v.id.filter(|id| id.starts_with("service-"))
+                .and_then(|id| id.rsplit('-').next().map(str::to_string))
+        })
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 /// Evidenční číslo vozu, který právě jede spojem `trip_id` (GTFS trip_id ze statických dat).
 pub fn vehicle_for_trip(feed: &[u8], trip_id: &str) -> Option<String> {
     if trip_id.is_empty() {
@@ -88,16 +115,93 @@ pub fn vehicle_for_trip(feed: &[u8], trip_id: &str) -> Option<String> {
         if vp.trip?.trip_id.as_deref() != Some(trip_id) {
             return None;
         }
-        let v = vp.vehicle?;
-        v.label
-            .filter(|l| !l.trim().is_empty())
-            // Jen `service-<x>-<číslo vozu>`; `metro-…` (pořadí soupravy) a `train-…` (číslo vlaku) nejsou čísla vozů.
-            .or_else(|| {
-                v.id.filter(|id| id.starts_with("service-"))
-                    .and_then(|id| id.rsplit('-').next().map(str::to_string))
-            })
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        vehicle_label(vp.vehicle?)
+    })
+}
+
+/// Poloha vozu spoje z feedu `vehicle_positions.pb`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VehicleFix {
+    pub label: Option<String>,
+    pub lat: f64,
+    pub lon: f64,
+    /// Pořadí zastávky, ke které vůz míří (GTFS `stop_sequence`, u PID 1..n).
+    pub stop_sequence: Option<u32>,
+    pub timestamp: Option<i64>,
+}
+
+/// Poloha vozu jedoucího spojem `trip_id`; `None` = spoj ve feedu není nebo nemá polohu.
+pub fn vehicle_fix(feed: &[u8], trip_id: &str) -> Option<VehicleFix> {
+    if trip_id.is_empty() {
+        return None;
+    }
+    let msg = FeedMessage::decode(feed).ok()?;
+    msg.entity.into_iter().find_map(|e| {
+        let vp = e.vehicle?;
+        if vp.trip?.trip_id.as_deref() != Some(trip_id) {
+            return None;
+        }
+        let pos = vp.position?;
+        Some(VehicleFix {
+            label: vp.vehicle.and_then(vehicle_label),
+            lat: f64::from(pos.latitude),
+            lon: f64::from(pos.longitude),
+            stop_sequence: vp.current_stop_sequence,
+            timestamp: vp.timestamp.and_then(|t| i64::try_from(t).ok()),
+        })
+    })
+}
+
+/// Kde na trase vůz je.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VehiclePlace {
+    AtStop(usize),
+    /// Mezi zastávkami `i` a `i+1`.
+    Between(usize),
+}
+
+/// Do této vzdálenosti od zastávky je vůz „na zastávce“.
+const AT_STOP_M: f64 = 50.0;
+/// Dál než tohle od trasy vůz na trase neumisťujeme.
+const MAX_OFF_ROUTE_M: f64 = 300.0;
+
+/// Umístí vůz na trasu zadanou souřadnicemi zastávek (lat, lon) v pořadí jízdy.
+pub fn place_vehicle(stops: &[(f64, f64)], fix: &VehicleFix) -> Option<VehiclePlace> {
+    let dist = |i: usize| crate::geo::haversine_m(fix.lat, fix.lon, stops[i].0, stops[i].1);
+    if let Some(s) = fix.stop_sequence.map(|s| s as usize).filter(|s| (1..=stops.len()).contains(s)) {
+        let next = s - 1;
+        return Some(if next == 0 || dist(next) <= AT_STOP_M {
+            VehiclePlace::AtStop(next)
+        } else {
+            VehiclePlace::Between(next - 1)
+        });
+    }
+    // Nejbližší úsek lomené čáry; ekvirektangulární projekce kolem polohy vozu (metry).
+    let k = 111_320.0;
+    let cos = fix.lat.to_radians().cos();
+    let xy = |(lat, lon): (f64, f64)| ((lon - fix.lon) * k * cos, (lat - fix.lat) * k);
+    let mut best: Option<(usize, f64)> = None;
+    for i in 0..stops.len().saturating_sub(1) {
+        let (a, b) = (xy(stops[i]), xy(stops[i + 1]));
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let len2 = dx * dx + dy * dy;
+        let t = if len2 > 0.0 { (-(a.0 * dx + a.1 * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+        let d = (a.0 + t * dx).hypot(a.1 + t * dy);
+        if best.is_none_or(|(_, bd)| d < bd) {
+            best = Some((i, d));
+        }
+    }
+    let (i, d) = best?;
+    if d > MAX_OFF_ROUTE_M {
+        return None;
+    }
+    // U zastávky (konec i začátek úseku; vůz může být kousek za ní) = na zastávce.
+    Some(if dist(i + 1) <= AT_STOP_M {
+        VehiclePlace::AtStop(i + 1)
+    } else if dist(i) <= AT_STOP_M {
+        VehiclePlace::AtStop(i)
+    } else {
+        VehiclePlace::Between(i)
     })
 }
 
@@ -159,6 +263,9 @@ mod tests {
             vehicle: Some(VehiclePosition {
                 trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
                 vehicle: Some(VehicleDescriptor { id: Some(vehicle_id.into()), label: label.map(Into::into) }),
+                position: None,
+                current_stop_sequence: None,
+                timestamp: None,
             }),
         }
     }
@@ -204,6 +311,9 @@ mod mode_tests {
                 vehicle: Some(VehiclePosition {
                     trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
                     vehicle: Some(VehicleDescriptor { id: Some(vehicle_id.into()), label: None }),
+                    position: None,
+                    current_stop_sequence: None,
+                    timestamp: None,
                 }),
             }],
         }
@@ -271,5 +381,66 @@ mod delay_tests {
         assert_eq!(d.at("nope", "U1Z2P"), None);
         assert_eq!(d.at("T1", "XYZ"), None);
         assert_eq!(parse_trip_delays(b"\xff\xff"), Delays::default());
+    }
+}
+
+#[cfg(test)]
+mod place_tests {
+    use super::*;
+    use prost::Message;
+
+    // Tři zastávky na přímce (poledník), po ~500 m.
+    const STOPS: [(f64, f64); 3] = [(50.0, 14.4), (50.0045, 14.4), (50.0090, 14.4)];
+
+    fn fix(lat: f64, lon: f64, seq: Option<u32>) -> VehicleFix {
+        VehicleFix { label: None, lat, lon, stop_sequence: seq, timestamp: None }
+    }
+
+    #[test]
+    fn place_by_stop_sequence() {
+        assert_eq!(place_vehicle(&STOPS, &fix(50.00675, 14.4, Some(3))), Some(VehiclePlace::Between(1)));
+        // Míří na první zastávku, nebo je u cílové zastávky do 50 m.
+        assert_eq!(place_vehicle(&STOPS, &fix(50.0, 14.4, Some(1))), Some(VehiclePlace::AtStop(0)));
+        assert_eq!(place_vehicle(&STOPS, &fix(50.0090, 14.4, Some(3))), Some(VehiclePlace::AtStop(2)));
+    }
+
+    #[test]
+    fn place_by_gps_projection() {
+        assert_eq!(place_vehicle(&STOPS, &fix(50.00225, 14.4003, None)), Some(VehiclePlace::Between(0)));
+        // ~20 m od 2. zastávky.
+        assert_eq!(place_vehicle(&STOPS, &fix(50.00468, 14.4, None)), Some(VehiclePlace::AtStop(1)));
+    }
+
+    #[test]
+    fn place_vehicle_far_from_route_is_none() {
+        assert_eq!(place_vehicle(&STOPS, &fix(50.00225, 14.4142, None)), None);
+        assert_eq!(place_vehicle(&[], &fix(50.0, 14.4, None)), None);
+    }
+
+    #[test]
+    fn vehicle_fix_reads_position() {
+        let mk = |trip: &str| FeedEntity {
+            id: "x".into(),
+            trip_update: None,
+            vehicle: Some(VehiclePosition {
+                trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
+                vehicle: Some(VehicleDescriptor { id: Some("service-0-8758".into()), label: Some("8758".into()) }),
+                position: Some(Position { latitude: 50.5, longitude: 14.25 }),
+                current_stop_sequence: Some(5),
+                timestamp: Some(1_700_000_000),
+            }),
+        };
+        let bytes = FeedMessage { entity: vec![mk("A"), mk("B")] }.encode_to_vec();
+        assert_eq!(
+            vehicle_fix(&bytes, "B"),
+            Some(VehicleFix {
+                label: Some("8758".into()),
+                lat: 50.5,
+                lon: 14.25,
+                stop_sequence: Some(5),
+                timestamp: Some(1_700_000_000)
+            })
+        );
+        assert_eq!(vehicle_fix(&bytes, "nope"), None);
     }
 }
