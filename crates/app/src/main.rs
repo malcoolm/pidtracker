@@ -8,6 +8,7 @@ mod realtime;
 mod screens;
 mod state;
 mod stop_input;
+mod topbar;
 mod storage;
 mod sync;
 mod timetable_loader;

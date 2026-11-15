@@ -38,6 +38,8 @@ pub enum Screen {
     Edit(String),
     Stats,
     Settings,
+    /// Mimořádnosti; `open` je předvybraná mimořádnost (Task 10).
+    Alerts { open: Option<String> },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -64,6 +66,10 @@ pub struct AppState {
     pub last_fix: RwSignal<Option<Fix>>,
     /// Zvýší se při každém návratu aplikace do popředí.
     pub foreground: RwSignal<u32>,
+    /// Menu (hamburger) je otevřené.
+    pub menu_open: RwSignal<bool>,
+    /// Počet aktivních mimořádností. Zatím zástupná hodnota, Task 10 nahradí.
+    pub alert_count: Memo<usize>,
 }
 
 impl AppState {
@@ -80,6 +86,8 @@ impl AppState {
             toast: RwSignal::new(None),
             last_fix: RwSignal::new(ls_get(keys::LAST_FIX)),
             foreground: RwSignal::new(0),
+            menu_open: RwSignal::new(false),
+            alert_count: Memo::new(move |_| 0usize),
         }
     }
 

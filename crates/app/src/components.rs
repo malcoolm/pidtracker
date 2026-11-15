@@ -75,31 +75,6 @@ pub fn Toast() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn BottomNav() -> impl IntoView {
-    let state = expect_context::<AppState>();
-    let item = move |label: &'static str, target: Screen| {
-        let t = target.clone();
-        let active = move || {
-            let s = state.screen.get();
-            std::mem::discriminant(&s) == std::mem::discriminant(&t)
-                || (matches!(t, Screen::Home) && matches!(s, Screen::Board { .. } | Screen::Alight))
-                || (matches!(t, Screen::History) && matches!(s, Screen::Edit(_)))
-        };
-        view! {
-            <button class:active=active on:click=move |_| state.screen.set(target.clone())>{label}</button>
-        }
-    };
-    view! {
-        <nav class="bottom-nav">
-            {item("Jízda", Screen::Home)}
-            {item("Historie", Screen::History)}
-            {item("Statistiky", Screen::Stats)}
-            {item("Nastavení", Screen::Settings)}
-        </nav>
-    }
-}
-
 /// Upozornění na stav dat jízdního řádu.
 #[component]
 pub fn DataBanner() -> impl IntoView {

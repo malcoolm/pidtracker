@@ -34,9 +34,7 @@ fn Idle() -> impl IntoView {
     };
     view! {
         <section class="home">
-            <button class="primary huge" on:click=move |_| state.screen.set(Screen::Board { group: None })>
-                "Nová jízda"
-            </button>
+            <button class="fab" on:click=move |_| state.screen.set(Screen::Board { group: None })>"＋ Nová jízda"</button>
             <Show when=move || !recent().is_empty()>
                 <h3>"Poslední jízdy"</h3>
                 <div class="list">

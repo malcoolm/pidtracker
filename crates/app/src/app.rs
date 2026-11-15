@@ -3,11 +3,12 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
-use crate::components::{BottomNav, SyncBadge, Toast};
+use crate::components::Toast;
 use crate::config::{APP_VERSION, BUILD_ID};
 use crate::halloween::{HalloweenDeco, apply_season};
 use crate::screens::{Alight, Board, Edit, History, Home, Onboarding, Settings, Stats};
 use crate::state::{AppState, Screen, TtState};
+use crate::topbar::TopBar;
 use crate::{storage, sync, timetable_loader, update};
 
 #[component]
@@ -42,8 +43,8 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Show when=move || !needs_setup() fallback=|| view! { <main class="app"><Onboarding /></main> }>
+            <TopBar />
             <main class="app">
-                <SyncBadge />
                 {move || match state.screen.get() {
                     Screen::Home => view! { <Home /> }.into_any(),
                     Screen::Board { group } => view! { <Board group=group /> }.into_any(),
@@ -52,10 +53,10 @@ pub fn App() -> impl IntoView {
                     Screen::Edit(id) => view! { <Edit id=id /> }.into_any(),
                     Screen::Stats => view! { <Stats /> }.into_any(),
                     Screen::Settings => view! { <Settings /> }.into_any(),
+                    Screen::Alerts { .. } => view! { <section><h2>"Mimořádnosti"</h2></section> }.into_any(),
                 }}
                 <footer class="version">{format!("v{APP_VERSION} ({BUILD_ID})")}</footer>
             </main>
-            <BottomNav />
         </Show>
         <Toast />
         <Show when=move || halloween.get()>

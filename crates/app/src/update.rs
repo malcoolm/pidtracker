@@ -42,7 +42,7 @@ pub enum UpdateCheck {
 pub fn is_safe(state: &AppState) -> bool {
     match state.screen.get_untracked() {
         Screen::Home => state.current_ride().is_none(),
-        Screen::History | Screen::Stats | Screen::Settings => true,
+        Screen::History | Screen::Stats | Screen::Settings | Screen::Alerts { .. } => true,
         Screen::Board { .. } | Screen::Alight | Screen::Edit(_) => false,
     }
 }
