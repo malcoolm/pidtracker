@@ -75,17 +75,58 @@ přesměrováním.
 
 ## Kontrolní bod G – verze 0.5.0
 
-- [ ] Nahoře je červený proužek ve stylu PID. Písmo Fira Sans vypadá stejně i po zapnutí
-      režimu Letadlo (žádné načítání písma z internetu). Tmavý režim se řídí systémem
-      (Nastavení iOS → Zobrazení a jas).
-- [ ] Menu ☰ se otevře a obsahuje i ikonku stavu (přihlášení / synchronizace).
-- [ ] Tlačítko (fab) je vlevo dole a poslední jízdu lze vysunout nad něj.
-- [ ] U zpožděného spoje je původní čas přeškrtnutý a vedle něj skutečný.
-- [ ] „›“ na konci řádku odjezdu otevře detail trasy se štítkem vozu.
-- [ ] V menu je **Mimořádnosti**. Při nové mimořádnosti na lince z historie se objeví
-      oranžový pruh „⚠ Nová mimořádnost“.
-- [ ] Poznámka zapsaná v **Úpravě jízdy** se objeví v tabulce ve sloupci `note` (AB).
-- [ ] Ve **Statistikách** ukazuje volba **Oba** jeden společný součet.
-- [ ] Po zhruba hodině klepněte na cokoli: přihlášení se tiše obnoví bez zadávání hesla.
-      Pokud popup Googlu v aplikaci na ploše zůstane prázdný nebo ho nejde zavřít, zapište to sem
-      a obnovu pro iOS standalone vypněte (viz spec 4.9).
+**Vzhled a horní lišta**
+
+- [ ] Nahoře je pevný červený proužek s nápisem „PID Tracker“, nezajíždí pod výřez (notch)
+      a při posouvání obsahu zůstává na místě. Písmo je Fira Sans.
+- [ ] Zapněte režim Letadlo a aplikaci zavřete a znovu otevřete: písmo vypadá stejně.
+- [ ] Tmavý režim se řídí systémem (Nastavení iOS → Zobrazení a jas): tmavé pozadí,
+      proužek zůstává s červenou linkou dole.
+- [ ] Ikonka stavu je **v proužku** (✓ s časem / ⟳ / „čeká N“ / ⚠). Klepnutí na ni otevře menu ☰.
+- [ ] Menu obsahuje řádek „Přihlášen: …“, zavře se přes ✕, klepnutím na ztmavenou plochu
+      i výběrem položky. Aktivní položka má červený proužek.
+- [ ] Tlačítko **Nová jízda** (fab) je na úvodní obrazovce vlevo dole. Během probíhající jízdy
+      a na ostatních obrazovkách není vidět. Poslední jízdu lze vysunout nad něj.
+
+**Zpoždění a detail spoje**
+
+Zpoždění se ukazuje jen u vytíženého spoje v provozu: vyberte tramvaj nebo autobus ve špičce.
+Když žádný zpožděný spoj není, zapište „neověřeno“ a zkuste později.
+
+- [ ] Zpožděný spoj: původní čas přeškrtnutý, vedle červený nový čas a „+N min · za M min“.
+      Dřívější odjezd má „−N min“. Spoj s živými daty bez zpoždění: „včas · za N min“.
+      V Letadlo režimu jen šedé „za N min“.
+- [ ] „›“ na konci řádku odjezdu otevře trasu spoje: řádek „tady stojíš“ je zvýrazněný,
+      projeté zastávky jsou šedé, dlouhé úseky jsou sbalené jako „⋮ dalších N zastávek“.
+- [ ] V detailu je štítek vozu „🚋 vůz … · před …“. Offline místo něj
+      „Poloha vozu není k dispozici“.
+- [ ] Klepnutí na řádek odjezdu spoj stále vybere, klepnutí na „›“ ho jen otevře.
+      **Zpět** vrátí na stejnou zastávku i s výběrem.
+- [ ] „›“ funguje i u spojů pod **Právě odjelo**. U **Jiná linka…** žádné „›“ není.
+
+**Mimořádnosti**
+
+- [ ] V menu je **Mimořádnosti** s počtem, na ikoně ☰ je tečka, když něco platí.
+      U odjezdů na dotčené lince je ⚠.
+- [ ] Položky seznamu se po klepnutí rozbalí a mají odkaz „Více na pid.cz“. Plánované
+      mají „plánováno od …“.
+- [ ] Při nové mimořádnosti na lince z historie se nahoře objeví oranžový pruh
+      „⚠ Nová mimořádnost“ (nebo „⚠ N nové mimořádnosti“). Klepnutí otevře seznam rozbalený,
+      ✕ pruh zavře. Nikdy nepřijde systémová notifikace. Závisí na skutečné nové
+      mimořádnosti; když se při testu žádná neobjeví, zapište „neověřeno, čeká na skutečnou
+      mimořádnost“.
+
+**Poznámka a statistiky**
+
+- [ ] V **Úpravě jízdy** vyplňte poznámku → v Historii je u jízdy 📝. V Nástupu
+      a u probíhající jízdy se poznámka nezobrazuje. V tabulce je ve sloupci `note` (AB).
+- [ ] Ve **Statistikách** ukazuje volba **Oba** jeden společný součet (jeden blok).
+
+**Tiché obnovení přihlášení**
+
+- [ ] Zůstaňte přihlášeni, aplikaci nechte nečinnou nebo zavřenou aspoň 55 minut. Pak online
+      klepněte na tlačítko (ne do textového pole): okno Googlu krátce probliklo a samo se zavře,
+      proběhne synchronizace. Klepnutí do textového pole nic nespustí. Ruční
+      **Přihlásit pro synchronizaci** funguje dál.
+- [ ] Pokud okno zůstane prázdné nebo nejde zavřít (aplikace na ploše), zapište sem, co se
+      stalo, a verzi iOS. Obnova se pak pro iOS standalone vypne (viz spec 4.9).
