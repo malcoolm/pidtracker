@@ -250,3 +250,25 @@ fn group_coords_of_first_stop() {
     let (lat, lon) = ix.group_coords(group(&ix, "Náměstí Míru"));
     assert!((lat - 50.0755).abs() < 1e-6 && (lon - 14.4375).abs() < 1e-6);
 }
+
+#[test]
+fn trip_route_lists_all_stops() {
+    let ix = index();
+    let dep = &ix.departures(group(&ix, "Náměstí Míru"), prague(2026, 10, 26, 7, 58), 5, 30)[0];
+    let r = ix.trip_route(dep);
+    let names: Vec<_> = r.stops.iter().map(|s| s.name.as_str()).collect();
+    let times: Vec<_> = r.stops.iter().map(|s| s.time.format("%H:%M").to_string()).collect();
+    assert_eq!(names, vec!["Náměstí Míru", "Jana Masaryka", "Ruská"]);
+    assert_eq!(times, vec!["08:00", "08:02", "08:05"]);
+    assert_eq!(r.board, Some(0));
+}
+
+#[test]
+fn night_trip_stops_after_midnight() {
+    let ix = index();
+    let dep = &ix.departures(group(&ix, "Náměstí Míru"), prague(2026, 11, 1, 0, 5), 5, 30)[0];
+    let r = ix.trip_route(dep);
+    let times: Vec<_> = r.stops.iter().map(|s| s.time.format("%H:%M").to_string()).collect();
+    assert_eq!(times, vec!["00:10", "00:12", "00:15"]);
+    assert!(r.stops.iter().all(|s| s.time.format("%Y-%m-%d").to_string() == "2026-11-01"));
+}

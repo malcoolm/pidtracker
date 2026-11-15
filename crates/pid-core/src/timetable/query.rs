@@ -48,6 +48,24 @@ pub struct Departure {
     pub pattern: u32,
 }
 
+/// Zastávka na trase spoje z jízdního řádu.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TripStop {
+    pub stop: u32,
+    pub gtfs_id: String,
+    pub name: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub time: DateTime<Tz>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TripRoute {
+    pub stops: Vec<TripStop>,
+    /// Index zastávky nástupu.
+    pub board: Option<usize>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct StopRef {
     pub stop: u32,
@@ -183,6 +201,42 @@ impl TimetableIndex {
     /// Označení stanoviště (např. „A“, „1“), pokud existuje.
     pub fn platform(&self, stop: u32) -> Option<&str> {
         self.tt.stops[stop as usize].platform.map(|p| self.tt.string(p))
+    }
+
+    /// Celá trasa spoje z jízdního řádu (všechny zastávky patternu v pořadí) s časy.
+    /// Den služby a pozice nástupu se hledají přes `dep.time`, takže to funguje i pro
+    /// linky projíždějící stejnou zastávku dvakrát a pro noční spoje (časy ≥ 24 h).
+    pub fn trip_route(&self, dep: &Departure) -> TripRoute {
+        let trip = &self.tt.trips[dep.trip as usize];
+        let profile = &self.tt.profiles[trip.profile as usize];
+        let pattern = &self.tt.patterns[profile.pattern as usize];
+        let day = dep.time.date_naive();
+        let found = [day - Duration::days(1), day, day + Duration::days(1)].into_iter().find_map(|d| {
+            (0..pattern.stops.len())
+                .find(|&pos| pattern.stops[pos] == dep.stop && gtfs_instant(d, trip.start + profile.offsets[pos]) == dep.time)
+                .map(|pos| (d, pos))
+        });
+        let (service_date, board) = match found {
+            Some((d, pos)) => (d, Some(pos)),
+            None => (day, None),
+        };
+        let stops = pattern
+            .stops
+            .iter()
+            .zip(&profile.offsets)
+            .map(|(&stop, &offset)| {
+                let s = &self.tt.stops[stop as usize];
+                TripStop {
+                    stop,
+                    gtfs_id: s.gtfs_id.clone(),
+                    name: self.tt.stop_name(stop).to_string(),
+                    lat: s.lat_e6 as f64 / 1e6,
+                    lon: s.lon_e6 as f64 / 1e6,
+                    time: gtfs_instant(service_date, trip.start + offset),
+                }
+            })
+            .collect();
+        TripRoute { stops, board }
     }
 }
 
