@@ -243,10 +243,11 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
                         .into_any(),
                     );
                     rows.extend(ride_stops(ix, leg, color.clone(), trip_id, delays, at));
-                    let last = i + 1 == n;
+                    // Za jízdou může následovat chůze; je-li ta poslední, jde do cíle, ne o přestup.
+                    let last = i + 1 + usize::from(next_walk.is_some()) == n;
                     let walk_label = next_walk.filter(|&s| s > 0).map(|s| {
-                        let prefix = if last { "" } else { "přestup " };
-                        format!("{prefix}🚶 {} min", walk_min(s))
+                        let (prefix, suffix) = if last { ("", " do cíle") } else { ("přestup ", "") };
+                        format!("{prefix}🚶 {} min{suffix}", walk_min(s))
                     });
                     let seg = if next_walk.is_some() { Some(None) } else { None };
                     rows.push(
