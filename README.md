@@ -21,6 +21,7 @@ Dokumentace:
 - Návrh: [`docs/superpowers/specs/`](docs/superpowers/specs/) (původní návrh
   [`2026-10-25-pidtracker-design.md`](docs/superpowers/specs/2026-10-25-pidtracker-design.md),
   vyhledávání spojení [`2026-11-15-vyhledavani-spojeni-design.md`](docs/superpowers/specs/2026-11-15-vyhledavani-spojeni-design.md))
+- Jak řídíme vývoj (hlášení, backlog, sprinty): [`docs/proces.md`](docs/proces.md)
 - Formát jízdního řádu `.pidt`: [`docs/pidt-format.md`](docs/pidt-format.md)
 - Verze a poznámky k vydání: [GitHub Releases](https://github.com/malcoolm/pidtracker/releases)
 - Nastavení Google: [`docs/setup-google.md`](docs/setup-google.md)
