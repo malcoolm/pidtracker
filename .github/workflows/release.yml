@@ -43,9 +43,13 @@ jobs:
         run: cargo xtask dist --public-url /${{ github.event.repository.name }}/ --fetch-gtfs
       - name: Zip
         run: cd dist && zip -qr "../pidtracker-${TAG}.zip" .
+      # Poznámky = zpráva tagu bez prvního řádku (ten je stejný jako název releasu).
       - name: Create release if missing
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || \
-            gh release create "$TAG" --verify-tag --notes-from-tag --title "PID Tracker ${TAG#v}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "+refs/tags/$TAG:refs/tags/$TAG"
+            git for-each-ref "refs/tags/$TAG" --format='%(contents:body)' > notes.md
+            gh release create "$TAG" --verify-tag --notes-file notes.md --title "PID Tracker ${TAG#v}"
+          fi
       - name: Upload build
         run: gh release upload "$TAG" "pidtracker-${TAG}.zip" --clobber

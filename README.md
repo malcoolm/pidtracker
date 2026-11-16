@@ -56,7 +56,7 @@ Aplikace si novou verzi stáhne sama (autoupdate na bezpečné obrazovce).
 ### Vydání verze
 
 Po zvýšení `version` v `Cargo.toml` a pushi do `main` označte verzi anotovaným tagem;
-zpráva tagu se stane poznámkami k vydání:
+zpráva tagu bez prvního řádku (např. „PID Tracker 0.7.0“) se stane poznámkami k vydání:
 
 ```
 git tag -a v0.7.0 -F poznamky.md
