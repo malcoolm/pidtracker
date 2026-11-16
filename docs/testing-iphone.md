@@ -218,3 +218,24 @@ Co nejde ověřit (např. nevyšlo se ven), zapište „neověřeno“.
       název…“ a klepněte na „Hotovo“.
 - [ ] Po Výstupu se aktualizace použije (hláška „Aktualizováno na verzi 0.6.0 …“), pruh
       zmizí nejpozději po návratu do popředí nebo připojení k síti a hledání spojení funguje.
+
+## Kontrolní bod I – vánoční vzhled (#4)
+
+Vánoční vzhled se sám zapne v sobotu 28. 11. 2026. Do té doby ho vynutíte adresou
+`https://malcoolm.github.io/pidtracker/?vanoce=1` v Safari (aplikace z plochy parametr
+neumí; vzhled v ní uvidíte až od 28. 11.).
+
+- [ ] **Světlý režim** (Nastavení iPhonu → Zobrazení a jas → Světlý): krémové pozadí,
+      tmavě zelená horní lišta se zlatou linkou, červená tlačítka, zelené nadpisy s 🎄.
+- [ ] **Tmavý režim**: tmavě zelené pozadí, zlaté nadpisy, červená tlačítka; text dobře
+      čitelný. Přepněte režim za běhu – barvy se přepnou samy.
+- [ ] Vánoční písmo je na nadpisech, názvu v liště, položkách menu, tlačítkách a štítcích
+      („nejrychlejší“); háčky a kroužky (Ř, ř, ů, ď, ť, Č) vypadají jako zbytek písma, žádné
+      písmeno není v jiném písmu.
+- [ ] Časy, zastávky, nástupiště, zpoždění a čísla linek zůstávají v běžném písmu
+      a jsou dobře čitelné, i na slunci.
+- [ ] Zpoždění (oranžová) a „Vyrazte …“ (zelená) jsou dobře odlišené v obou režimech.
+- [ ] Offline: zapněte režim letadlo, obnovte stránku s `?vanoce=1` – písmo i barvy zůstávají.
+- [ ] `?halloween=1` vypadá jako o Halloweenu (tmavý vzhled, pavouk, 🎃).
+- [ ] Bez parametru (před 28. 11.) běžný vzhled; barva systémové lišty nahoře je červená
+      (ve tmavém režimu tmavě šedá), ne modrá.

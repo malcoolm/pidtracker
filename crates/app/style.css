@@ -485,6 +485,58 @@ html.halloween .app { position: relative; z-index: 1; }
 .hw-skel-2 { right: 46px; transform: scaleX(-1); }
 .hw-eye { fill: var(--bg); }
 
+/* Vánoce (sobota před 1. adventem – 28. 12.): barvy ve světlém i tmavém režimu,
+   vánoční písmo jen na nadpisy a ovládání; časy, zastávky a linky zůstávají ve Fira Sans. */
+@font-face {
+  font-family: "Vanocni Hory";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("fonts/vanocni-hory-700.woff2") format("woff2");
+}
+html.vanoce {
+  --bg: #fbf7ef;
+  --surface: #ffffff;
+  --fg: #23302a;
+  --muted: #4f5b52;
+  --border: #eadfca;
+  --accent: #b3121b;
+  --accent-text: #a10f17;
+  --accent-fg: #ffffff;
+  --accent-soft: #f7e6e2;
+  --bar-bg: #1f5b3a;
+  --bar-line: #d4a33b;
+  --season-head: #1f5b3a;
+}
+@media (prefers-color-scheme: dark) {
+  html.vanoce {
+    --bg: #0f1a14;
+    --surface: #182820;
+    --fg: #f3ede0;
+    --muted: #b9b3a3;
+    --border: #2a3d31;
+    --accent: #d6303a;
+    --accent-text: #ff7b7b;
+    --accent-fg: #ffffff;
+    --accent-soft: #3a1c1c;
+    --bar-bg: #143823;
+    --bar-line: #d4a33b;
+    --season-head: #e9c46a;
+  }
+}
+html.vanoce .topbar { border-bottom-width: 3px; }
+html.vanoce :is(h1, h2, h3, .topbar-title, .menu-item, .menu-link, .primary, .secondary, .jc-label, .tag, .chip) {
+  font-family: "Vanocni Hory", "Fira Sans", cursive;
+  font-weight: 700;
+}
+html.vanoce :is(h1, h2, h3) { color: var(--season-head); }
+html.vanoce h2 { font-size: 26px; }
+html.vanoce h3 { font-size: 19px; text-transform: none; letter-spacing: 0; }
+html.vanoce h2::after { content: " 🎄"; font-family: "Fira Sans", sans-serif; font-size: 20px; }
+html.vanoce .topbar-title { font-size: 21px; }
+html.vanoce :is(.menu-item, .primary, .secondary) { font-size: 19px; }
+html.vanoce :is(.jc-label, .tag, .chip) { font-size: 1.1em; }
+
 /* Řádek odjezdu s tlačítkem detailu */
 .dep-item { display: flex; align-items: stretch; gap: 4px; }
 .dep-item .dep-row { flex: 1; min-width: 0; width: auto; }
