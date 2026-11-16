@@ -1,10 +1,27 @@
 # PID Tracker
 
-Osobní PWA pro evidenci jízd pražskou integrovanou dopravou (PID). Podle polohy předvyplní
-zastávku, podle jízdního řádu nabídne linku, jízdy ukládá offline a synchronizuje do
-Google tabulky. Ukazuje statistiky po osobách a obdobích.
+Osobní PWA pro cestování pražskou integrovanou dopravou (PID) a evidenci jízd. Běží offline
+nad jízdním řádem PID, živá data bere z PID GTFS-Realtime.
 
-- Návrh: [`docs/superpowers/specs/2026-10-25-pidtracker-design.md`](docs/superpowers/specs/2026-10-25-pidtracker-design.md)
+- **Vyhledávání spojení** (domovská obrazovka): odjezd v / příjezd do, z aktuální polohy
+  nebo ze zastávky, s pěšími přestupy; nastavitelná rezerva na první nástup a vyloučené
+  druhy dopravy. Detail spojení s časovou osou, zpožděním a stavem „stihnu / nestihnu“.
+- **Odjezdy ze zastávky** podle polohy, se zpožděním v reálném čase. Vyhledávání zastávek
+  bez diakritiky, řazené podle vzdálenosti.
+- **Detail spoje**: celá trasa s časy a aktuální polohou vozu.
+- **Mimořádnosti PID**: seznam, upozornění v aplikaci, značky na trase.
+- **Evidence jízd**: nástup, linka a výstup předvyplněné z polohy a jízdního řádu, číslo
+  vozu z živých dat, SPZ, dopravce a poznámka. Jízdy se ukládají offline a synchronizují
+  do sdílené Google tabulky.
+- **Historie a statistiky** po osobách (i společně „Oba“), obdobích, dopravcích a vozech.
+- Vzhled v barvách PID, sezónní halloweenský motiv, automatická aktualizace aplikace.
+
+Dokumentace:
+
+- Návrh: [`docs/superpowers/specs/`](docs/superpowers/specs/) (původní návrh
+  [`2026-10-25-pidtracker-design.md`](docs/superpowers/specs/2026-10-25-pidtracker-design.md),
+  vyhledávání spojení [`2026-11-15-vyhledavani-spojeni-design.md`](docs/superpowers/specs/2026-11-15-vyhledavani-spojeni-design.md))
+- Verze a poznámky k vydání: [GitHub Releases](https://github.com/malcoolm/pidtracker/releases)
 - Nastavení Google: [`docs/setup-google.md`](docs/setup-google.md)
 - Nastavení GitHub Pages: [`docs/setup-github-pages.md`](docs/setup-github-pages.md)
 - Testování na iPhonu: [`docs/testing-iphone.md`](docs/testing-iphone.md)
@@ -13,8 +30,8 @@ Google tabulky. Ukazuje statistiky po osobách a obdobích.
 
 | Crate | Účel |
 |---|---|
-| `crates/pid-core` | Čistá logika s testy: formát a dotazy jízdního řádu, model jízdy, řádky tabulky, slučování synchronizace, statistiky |
-| `crates/gtfs-prep` | CLI/knihovna: PID GTFS → kompaktní `timetable-<verze>.pidt` (~1,2 MB) + `manifest.json` |
+| `crates/pid-core` | Čistá logika s testy: formát a dotazy jízdního řádu, vyhledávání spojení (RAPTOR), GTFS-Realtime (zpoždění, poloha vozů, mimořádnosti), model jízdy, řádky tabulky, slučování synchronizace, statistiky |
+| `crates/gtfs-prep` | CLI/knihovna: PID GTFS → kompaktní `timetable-<verze>.pidt` (~1,3 MB, formát PIDT3 s pěšími přestupy) + `manifest.json` |
 | `crates/app` | Leptos (CSR) PWA kompilovaná do WebAssembly; service worker `public/sw.js` |
 | `xtask` | `cargo xtask dist` – sestaví složku `dist/` pro GitHub Pages |
 
