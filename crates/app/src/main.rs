@@ -3,7 +3,7 @@ mod app;
 mod components;
 mod config;
 mod google;
-mod halloween;
+mod season;
 mod interop;
 mod realtime;
 mod reauth;

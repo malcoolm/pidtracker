@@ -5,7 +5,8 @@ use leptos::task::spawn_local;
 
 use crate::components::Toast;
 use crate::config::{APP_VERSION, BUILD_ID};
-use crate::halloween::{HalloweenDeco, apply_season};
+use crate::season::{HalloweenDeco, apply_season};
+use pid_core::season::Season;
 use crate::screens::{AlertsScreen, Alight, Board, Edit, History, Home, Onboarding, SearchScreen, Settings, Stats};
 use crate::state::{AppState, Screen};
 use crate::topbar::TopBar;
@@ -29,9 +30,9 @@ pub fn App() -> impl IntoView {
     crate::reauth::install(state);
 
     // Sezónní vzhled podle data; přepočet při návratu do popředí (např. 5. 11. ráno).
-    let halloween = RwSignal::new(apply_season());
+    let season = RwSignal::new(apply_season());
     crate::interop::on_visible(move || {
-        halloween.set(apply_season());
+        season.set(apply_season());
         state.foreground.update(|n| *n += 1);
     });
 
@@ -56,7 +57,7 @@ pub fn App() -> impl IntoView {
             </main>
         </Show>
         <Toast />
-        <Show when=move || halloween.get()>
+        <Show when=move || season.get() == Some(Season::Halloween)>
             <HalloweenDeco />
         </Show>
     }

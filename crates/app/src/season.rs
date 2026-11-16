@@ -1,33 +1,53 @@
-//! Halloweenský vzhled (24. 10. – 4. 11.): třída `halloween` na `<html>` a dekorace.
+//! Sezónní vzhled: třída `halloween` nebo `vanoce` na `<html>` (barvy a písmo v CSS),
+//! barva systémové lišty a halloweenské dekorace.
 
 use leptos::prelude::*;
-use pid_core::season::is_halloween;
+use pid_core::season::{Season, season};
 
 use crate::util::now;
 
-const THEME_COLOR: &str = "#00559e";
-const HALLOWEEN_THEME_COLOR: &str = "#2a2b30";
+/// Barva systémové lišty (`theme-color`): (světlý, tmavý) režim.
+const THEME_COLOR: (&str, &str) = ("#c40c00", "#252525");
+const HALLOWEEN_THEME_COLOR: (&str, &str) = ("#2a2b30", "#2a2b30");
+const VANOCE_THEME_COLOR: (&str, &str) = ("#1f5b3a", "#143823");
 
-/// Je dnes Halloween? Pro test jde vynutit parametrem `?halloween=1`.
-pub fn halloween_active() -> bool {
-    let forced = web_sys::window()
-        .and_then(|w| w.location().search().ok())
-        .is_some_and(|q| q.contains("halloween=1"));
-    forced || is_halloween(now().date_naive())
+/// Dnešní sezóna. Pro test jde vynutit `?vanoce=1` (má přednost) nebo `?halloween=1`.
+pub fn current_season() -> Option<Season> {
+    let query = web_sys::window().and_then(|w| w.location().search().ok()).unwrap_or_default();
+    if query.contains("vanoce=1") {
+        Some(Season::Vanoce)
+    } else if query.contains("halloween=1") {
+        Some(Season::Halloween)
+    } else {
+        season(now().date_naive())
+    }
 }
 
-/// Zapne/vypne halloweenský vzhled podle dnešního data. Vrací, zda je zapnutý.
-pub fn apply_season() -> bool {
-    let on = halloween_active();
-    let Some(doc) = web_sys::window().and_then(|w| w.document()) else { return on };
+fn prefers_dark() -> bool {
+    web_sys::window()
+        .and_then(|w| w.match_media("(prefers-color-scheme: dark)").ok().flatten())
+        .is_some_and(|m| m.matches())
+}
+
+/// Nastaví vzhled podle dnešní sezóny a vrátí ji.
+pub fn apply_season() -> Option<Season> {
+    let current = current_season();
+    let Some(doc) = web_sys::window().and_then(|w| w.document()) else { return current };
     if let Some(html) = doc.document_element() {
         let classes = html.class_list();
-        let _ = if on { classes.add_1("halloween") } else { classes.remove_1("halloween") };
+        for (class, s) in [("halloween", Season::Halloween), ("vanoce", Season::Vanoce)] {
+            let _ = if current == Some(s) { classes.add_1(class) } else { classes.remove_1(class) };
+        }
     }
+    let (light, dark) = match current {
+        Some(Season::Halloween) => HALLOWEEN_THEME_COLOR,
+        Some(Season::Vanoce) => VANOCE_THEME_COLOR,
+        None => THEME_COLOR,
+    };
     if let Ok(Some(meta)) = doc.query_selector("meta[name=theme-color]") {
-        let _ = meta.set_attribute("content", if on { HALLOWEEN_THEME_COLOR } else { THEME_COLOR });
+        let _ = meta.set_attribute("content", if prefers_dark() { dark } else { light });
     }
-    on
+    current
 }
 
 /// Siluety: pavučina s pavoukem, čarodějnice na koštěti, kostlivci. Jen dekorace, neklikatelné.
