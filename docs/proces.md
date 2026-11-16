@@ -57,7 +57,7 @@ Pak se na nástěnce přesune do **Připraveno**.
   řeknou, co se reálně vejde. Vybrané story dostanou iteraci a stav **Ve sprintu**.
 - Story s termínem (sezónní vzhled, změna jízdních řádů) se plánují podle termínu, ne jen
   podle priority.
-- **Cíl sprintu**: jedna věta v popisu iterace („Vánoční vzhled od 1. adventu, stanoviště
+- **Cíl sprintu**: jedna věta v README nástěnky (iterace popis nemají) („Vánoční vzhled od 1. adventu, stanoviště
   v detailu spojení“).
 
 ## 4. Vývoj
