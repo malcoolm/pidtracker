@@ -525,7 +525,7 @@ html.vanoce {
   }
 }
 html.vanoce .topbar { border-bottom-width: 3px; }
-html.vanoce :is(h1, h2, h3, .topbar-title, .menu-item, .menu-link, .primary, .secondary, .jc-label, .tag, .chip) {
+html.vanoce :is(h1, h2, h3, .topbar-title, .menu-item, .menu-link, .primary, .secondary, .jc-label, .tag) {
   font-family: "Vanocni Hory", "Fira Sans", cursive;
   font-weight: 700;
 }
@@ -535,7 +535,8 @@ html.vanoce h3 { font-size: 19px; text-transform: none; letter-spacing: 0; }
 html.vanoce h2::after { content: " 🎄"; font-family: "Fira Sans", sans-serif; font-size: 20px; }
 html.vanoce .topbar-title { font-size: 21px; }
 html.vanoce :is(.menu-item, .primary, .secondary) { font-size: 19px; }
-html.vanoce :is(.jc-label, .tag, .chip) { font-size: 1.1em; }
+html.vanoce :is(.jc-label, .tag) { font-size: 1.1em; }
+html.vanoce .huge { font-size: 24px; }
 
 /* Řádek odjezdu s tlačítkem detailu */
 .dep-item { display: flex; align-items: stretch; gap: 4px; }
