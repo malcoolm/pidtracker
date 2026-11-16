@@ -1,0 +1,51 @@
+name: Release
+
+# Push tagu vX.Y.Z → GitHub Release s poznámkami z anotovaného tagu a zipem buildu.
+# Ručně (workflow_dispatch) lze build dodat i ke staršímu tagu, jehož commit
+# tento workflow ještě neobsahuje.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag, např. v0.5.0"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      PIDTRACKER_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      # Bez --locked: starší verze neměly Cargo.lock vždy aktuální.
+      # Jízdní řády se stahují aktuální (PID GTFS platí jen 14 dní).
+      - name: Build dist
+        run: cargo xtask dist --public-url /${{ github.event.repository.name }}/ --fetch-gtfs
+      - name: Zip
+        run: cd dist && zip -qr "../pidtracker-${TAG}.zip" .
+      - name: Create release if missing
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --verify-tag --notes-from-tag --title "PID Tracker ${TAG#v}"
+      - name: Upload build
+        run: gh release upload "$TAG" "pidtracker-${TAG}.zip" --clobber

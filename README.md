@@ -53,6 +53,21 @@ GitHub Actions (`.github/workflows/deploy.yml`) při push do `main`, každé pon
 (PID GTFS platí jen 14 dní) a ručně: testy → `cargo xtask dist --fetch-gtfs` → GitHub Pages.
 Aplikace si novou verzi stáhne sama (autoupdate na bezpečné obrazovce).
 
+### Vydání verze
+
+Po zvýšení `version` v `Cargo.toml` a pushi do `main` označte verzi anotovaným tagem;
+zpráva tagu se stane poznámkami k vydání:
+
+```
+git tag -a v0.7.0 -F poznamky.md
+git push origin v0.7.0
+```
+
+Workflow `.github/workflows/release.yml` vytvoří GitHub Release a přiloží
+`pidtracker-v0.7.0.zip` (obsah `dist/` pro cestu `/pidtracker/`). Jízdní řády v zipu
+jsou z data sestavení. K tagu, jehož commit workflow ještě neobsahuje, se build dodá
+ručně: `gh workflow run release.yml -f tag=v0.5.0`.
+
 ## Data
 
 - Jízdní řády: PID open data (<https://pid.cz/o-systemu/opendata/>), soubor
