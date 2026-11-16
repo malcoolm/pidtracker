@@ -11,8 +11,8 @@ chyba / nápad    ──►   story / epic       ──►    sprint (2 týdny) 
 „k probrání“           kritéria, odhad            priorita, kapacita    ze sprintu            Release, iPhone
 ```
 
-Všechno žije na GitHubu: issues v repu a stav na nástěnce **GitHub Project „PID Tracker“**
-(pole Status, Priorita, Velikost, Sprint; odkaz je v záložce *Projects* repozitáře).
+Všechno žije na GitHubu: issues v repu a stav na nástěnce **[GitHub Project „PID Tracker“](https://github.com/users/malcoolm/projects/4)**
+(pole Status, Priorita, Velikost, Sprint; nástěnka je i v záložce *Projects* repozitáře).
 Mimo GitHub se stav neeviduje.
 
 Stavy na nástěnce: **Backlog → Připraveno → Ve sprintu → Rozpracováno → Hotovo**.
@@ -126,6 +126,6 @@ Pak se na nástěnce přesune do **Připraveno**.
 ```
 gh issue list --label "k probrání"                     # nová hlášení
 gh issue list --label story --state open               # backlog story
-gh project item-list <číslo> --owner malcoolm          # nástěnka
+gh project item-list 4 --owner malcoolm                # nástěnka
 gh auth refresh -s project                             # jednorázově: přístup k Projects z gh
 ```
