@@ -21,6 +21,7 @@ Dokumentace:
 - Návrh: [`docs/superpowers/specs/`](docs/superpowers/specs/) (původní návrh
   [`2026-10-25-pidtracker-design.md`](docs/superpowers/specs/2026-10-25-pidtracker-design.md),
   vyhledávání spojení [`2026-11-15-vyhledavani-spojeni-design.md`](docs/superpowers/specs/2026-11-15-vyhledavani-spojeni-design.md))
+- Formát jízdního řádu `.pidt`: [`docs/pidt-format.md`](docs/pidt-format.md)
 - Verze a poznámky k vydání: [GitHub Releases](https://github.com/malcoolm/pidtracker/releases)
 - Nastavení Google: [`docs/setup-google.md`](docs/setup-google.md)
 - Nastavení GitHub Pages: [`docs/setup-github-pages.md`](docs/setup-github-pages.md)
@@ -88,7 +89,7 @@ ručně: `gh workflow run release.yml -f tag=v0.5.0`.
 ## Data
 
 - Jízdní řády: PID open data (<https://pid.cz/o-systemu/opendata/>), soubor
-  `https://data.pid.cz/PID_GTFS.zip`.
+  `https://data.pid.cz/PID_GTFS.zip`, předpočítané do formátu `.pidt` ([`docs/pidt-format.md`](docs/pidt-format.md)).
 - Jízdy: Google tabulka uživatele, list `rides` (jeden řádek = jedna jízda, smazané mají
   `deleted = TRUE`) a `people` (e-mail, přezdívka).
 - Číslo vozu: veřejný GTFS-Realtime feed poloh vozidel PID (`pid_core::realtime`), jen tramvaje/autobusy/trolejbusy.
