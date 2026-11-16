@@ -1,0 +1,27 @@
+name: Nápad / přání
+description: Co by aplikace mohla umět nebo dělat jinak
+title: "Nápad: "
+labels: ["nápad", "k probrání"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Díky za nápad! Hlášení je **veřejné** – nepište sem e-maily, svou polohu ani odkaz na Google tabulku.
+  - type: textarea
+    id: co
+    attributes:
+      label: Co byste chtěli
+      placeholder: Aby šlo hledat spojení na adresu, ne jen na zastávku.
+    validations:
+      required: true
+  - type: textarea
+    id: proc
+    attributes:
+      label: K čemu by to bylo
+      description: V jaké situaci by vám to pomohlo.
+      placeholder: Když jedu k babičce, nevím, která zastávka je nejblíž.
+  - type: input
+    id: verze
+    attributes:
+      label: Verze aplikace
+      description: Vyplní se sama při otevření z menu aplikace.

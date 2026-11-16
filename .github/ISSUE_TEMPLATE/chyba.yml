@@ -1,0 +1,47 @@
+name: Něco nefunguje
+description: Chyba, divné chování nebo něco, co v aplikaci nedává smysl
+title: "Chyba: "
+labels: ["chyba", "k probrání"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Díky za nahlášení! Hlášení je **veřejné** – nepište sem e-maily, svou polohu ani odkaz na Google tabulku.
+  - type: textarea
+    id: co
+    attributes:
+      label: Co se stalo
+      description: Co jste dělali a co aplikace udělala.
+      placeholder: Hledal jsem spojení z Anděla na Florenc ve 23:40 a seznam zůstal prázdný.
+    validations:
+      required: true
+  - type: textarea
+    id: ocekavani
+    attributes:
+      label: Co jste čekali
+      placeholder: Že najde aspoň noční spoje.
+  - type: dropdown
+    id: opakovani
+    attributes:
+      label: Stává se to
+      options:
+        - pokaždé
+        - někdy
+        - stalo se jednou
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Snímek obrazovky
+      description: Nepovinné. Obrázek sem stačí přetáhnout nebo vložit.
+  - type: input
+    id: verze
+    attributes:
+      label: Verze aplikace
+      description: Vyplní se sama při otevření z menu aplikace, jinak ji najdete v Nastavení → O aplikaci → Build.
+      placeholder: 0.6.0+2e8cb4a.202611161058
+  - type: input
+    id: zarizeni
+    attributes:
+      label: Zařízení
+      description: Vyplní se samo při otevření z menu aplikace.
+      placeholder: iPhone, iOS 26
