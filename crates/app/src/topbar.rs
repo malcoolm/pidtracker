@@ -5,6 +5,7 @@ use leptos::prelude::*;
 use pid_core::alerts::{AlertPhase, ServiceAlert};
 
 use crate::components::{RouteBadge, SyncBadge};
+use crate::config::{BUILD_ID, REPO_URL};
 use crate::state::{AppState, Screen, SyncStatus};
 
 /// Krátký stav synchronizace v proužku; klepnutí otevře menu.
@@ -72,9 +73,25 @@ pub fn Menu() -> impl IntoView {
                 {item("Statistiky", Screen::Stats)}
                 {item("Mimořádnosti", Screen::Alerts { open: None })}
                 {item("Nastavení", Screen::Settings)}
+                <div class="menu-foot">
+                    <a class="menu-link" href=issue_url("chyba.yml") target="_blank" rel="noopener">"Nahlásit problém"</a>
+                    <a class="menu-link" href=issue_url("napad.yml") target="_blank" rel="noopener">"Navrhnout nápad"</a>
+                </div>
             </nav>
         </Show>
     }
+}
+
+/// Formulář GitHub Issues s předvyplněnou verzí a zařízením (pole `verze`, `zarizeni`
+/// v `.github/ISSUE_TEMPLATE/*.yml`).
+fn issue_url(template: &str) -> String {
+    let device = web_sys::window().and_then(|w| w.navigator().user_agent().ok()).unwrap_or_default();
+    let enc = |s: &str| String::from(js_sys::encode_uri_component(s));
+    format!(
+        "{REPO_URL}/issues/new?template={template}&verze={}&zarizeni={}",
+        enc(BUILD_ID),
+        enc(&device),
+    )
 }
 
 #[component]

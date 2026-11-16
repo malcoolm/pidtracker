@@ -11,3 +11,6 @@ pub const GOOGLE_CLIENT_ID: Option<&str> = match option_env!("PIDTRACKER_GOOGLE_
 
 /// Pevně nastavená Google tabulka s jízdami (sdílená mezi uživateli).
 pub const SHEET_ID: &str = "13_ofodGGIDmTKrkgJjoTp5OVAdcJkMLr2Lt411UNhxg";
+
+/// Repozitář aplikace (hlášení chyb a nápadů přes GitHub Issues).
+pub const REPO_URL: &str = "https://github.com/malcoolm/pidtracker";
