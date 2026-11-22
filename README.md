@@ -14,7 +14,7 @@ nad jízdním řádem PID, živá data bere z PID GTFS-Realtime.
   vozu z živých dat, SPZ, dopravce a poznámka. Jízdy se ukládají offline a synchronizují
   do sdílené Google tabulky.
 - **Historie a statistiky** po osobách (i společně „Oba“), obdobích, dopravcích a vozech.
-- Vzhled v barvách PID, sezónní halloweenský motiv, automatická aktualizace aplikace.
+- Vzhled v barvách PID, sezónní motivy (Halloween, Vánoce se sněhem a vánoční ikonou), automatická aktualizace aplikace.
 
 Dokumentace:
 

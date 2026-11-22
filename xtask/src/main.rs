@@ -104,11 +104,17 @@ fn git_hash() -> String {
     if dirty { format!("{hash}-dirty") } else { hash }
 }
 
-/// Sezónní sada ikon (relativně ke kořeni repa), která v daný den nahradí `dist/icons`.
+/// Sezónní sady ikon (relativně ke kořeni repa), které v daný den nahradí `dist/icons`.
 const HALLOWEEN_ICONS: &str = "crates/app/public/icons-halloween";
+/// Zdroj je `crates/app/icons-src/vanoce.svg`.
+const VANOCE_ICONS: &str = "crates/app/public/icons-vanoce";
 
 fn seasonal_icons(date: chrono::NaiveDate) -> Option<&'static str> {
-    pid_core::season::is_halloween(date).then_some(HALLOWEEN_ICONS)
+    use pid_core::season::{Season, season};
+    season(date).map(|s| match s {
+        Season::Halloween => HALLOWEEN_ICONS,
+        Season::Vanoce => VANOCE_ICONS,
+    })
 }
 
 fn dist(public_url: &str, data: DataSource) -> Result<()> {
@@ -185,6 +191,27 @@ mod tests {
         assert_eq!(seasonal_icons(d(10, 24)), Some(HALLOWEEN_ICONS));
         assert_eq!(seasonal_icons(d(11, 4)), Some(HALLOWEEN_ICONS));
         assert_eq!(seasonal_icons(d(11, 5)), None);
+    }
+
+    #[test]
+    fn christmas_icons_only_in_season() {
+        let d = |y, m, dd| chrono::NaiveDate::from_ymd_opt(y, m, dd).unwrap();
+        assert_eq!(seasonal_icons(d(2026, 11, 27)), None);
+        assert_eq!(seasonal_icons(d(2026, 11, 28)), Some(VANOCE_ICONS));
+        assert_eq!(seasonal_icons(d(2026, 12, 28)), Some(VANOCE_ICONS));
+        assert_eq!(seasonal_icons(d(2026, 12, 29)), None);
+        assert_eq!(seasonal_icons(d(2028, 12, 1)), None);
+        assert_eq!(seasonal_icons(d(2028, 12, 2)), Some(VANOCE_ICONS));
+    }
+
+    #[test]
+    fn seasonal_icon_sets_complete() {
+        let root = root();
+        for dir in [HALLOWEEN_ICONS, VANOCE_ICONS] {
+            for f in ["apple-touch-icon.png", "icon-192.png", "icon-512.png"] {
+                assert!(root.join(dir).join(f).is_file(), "{dir}/{f}");
+            }
+        }
     }
 
     #[test]

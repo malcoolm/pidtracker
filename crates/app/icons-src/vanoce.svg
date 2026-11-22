@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Vánoční ikona (#7): P a pruh jako běžná ikona, barvy vánočního vzhledu (#4). -->
+  <rect width="512" height="512" fill="#1f5b3a"/>
+  <!-- sníh -->
+  <g fill="#fbf7ef" opacity=".55">
+    <circle cx="62" cy="70" r="7"/><circle cx="130" cy="140" r="5"/><circle cx="440" cy="64" r="6"/>
+    <circle cx="392" cy="150" r="5"/><circle cx="70" cy="230" r="5"/><circle cx="452" cy="250" r="7"/>
+    <circle cx="96" cy="330" r="6"/><circle cx="420" cy="330" r="5"/><circle cx="60" cy="440" r="5"/>
+    <circle cx="470" cy="452" r="6"/><circle cx="250" cy="40" r="5"/><circle cx="170" cy="470" r="5"/>
+  </g>
+  <!-- P -->
+  <path fill="#fbf7ef" fill-rule="evenodd"
+        d="M186 356 V170 H268 A68 68 0 0 1 268 306 H236 V356 Z M236 212 V264 H264 A26 26 0 0 0 264 212 Z"/>
+  <!-- čepice Santy na P -->
+  <g transform="rotate(-14 240 170)">
+    <path d="M176 168 C196 96 262 74 318 92 C338 100 352 120 356 140 C338 126 318 122 300 132 C304 146 306 158 306 168 Z" fill="#c4161f"/>
+    <circle cx="362" cy="146" r="18" fill="#fbf7ef"/>
+    <rect x="166" y="160" width="152" height="30" rx="15" fill="#fbf7ef"/>
+  </g>
+  <!-- pruh -->
+  <rect x="114" y="398" width="286" height="30" fill="#d4a33b"/>
+  <!-- cesmína u pruhu -->
+  <g transform="translate(412 404)">
+    <path d="M0 0 C14 -22 34 -30 58 -26 C52 -18 54 -10 46 -6 C40 -2 30 -6 24 -2 C16 2 10 0 0 0 Z" fill="#3f9a5a"/>
+    <path d="M0 0 C-6 -22 -2 -44 14 -60 C16 -50 22 -46 20 -38 C18 -30 10 -28 10 -20 C10 -12 6 -6 0 0 Z" fill="#3f9a5a"/>
+    <circle cx="2" cy="4" r="9" fill="#c4161f"/><circle cx="18" cy="8" r="8" fill="#c4161f"/><circle cx="6" cy="18" r="8" fill="#c4161f"/>
+  </g>
+</svg>

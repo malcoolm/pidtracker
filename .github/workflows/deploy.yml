@@ -9,6 +9,11 @@ on:
     # Sezónní ikona aplikace: zapnout 24. 10., vrátit 5. 11. (viz cargo xtask dist).
     - cron: "30 3 24 10 *"
     - cron: "30 3 5 11 *"
+    # Vánoční ikona: sobota před 1. adventem připadá na 26. 11.–2. 12., proto se v těchto dnech
+    # staví denně (build ikonu zapne, až období začne); vrátit 29. 12.
+    - cron: "30 3 26-30 11 *"
+    - cron: "30 3 1,2 12 *"
+    - cron: "30 3 29 12 *"
   workflow_dispatch:
 
 permissions:

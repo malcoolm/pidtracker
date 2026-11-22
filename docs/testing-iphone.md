@@ -251,3 +251,17 @@ Stejně jako u bodu I: do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 - [ ] Zapněte Nastavení → Zpřístupnění → Pohyb → **Omezit pohyb**: vločky zůstanou stát
       (žádný pohyb). Po vypnutí zase padají.
 - [ ] `?halloween=1` a běžný vzhled sníh nemají.
+
+## Kontrolní bod K – vánoční ikona (#7)
+
+Ikonu si iOS uloží při přidání na plochu a později ji už nemění. Vánoční ikona se nasadí
+buildem v sobotu před 1. adventem (28. 11. 2026, 4:30) a běžná se vrátí buildem 29. 12.
+
+- [ ] Od 28. 11.: nejdřív v aplikaci počkejte, až je vše odesláno (v proužku ✓, ne „čeká N“) –
+      odstraněním z plochy iOS smaže i lokální data aplikace.
+- [ ] Dlouze podržte starou ikonu na ploše → Odstranit aplikaci → Odstranit z plochy. V Safari
+      otevřete `https://malcoolm.github.io/pidtracker/` a Sdílet → Přidat na plochu.
+      Na ploše je zelená ikona s P v Santově čepici.
+- [ ] Z nové ikony se aplikace spustí bez lišty Safari; po přihlášení Googlem se jízdy načtou
+      z tabulky.
+- [ ] Od 29. 12.: stejným postupem vraťte běžnou modrou ikonu.
