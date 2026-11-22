@@ -8,6 +8,7 @@ use pid_core::alerts::{AlertPhase, ListedAlert, list_alerts};
 use crate::alerts::{now_s, route_badge_info, when_label};
 use crate::components::RouteBadge;
 use crate::state::AppState;
+use crate::season::{Vignette, XmasVignette};
 
 #[component]
 fn AlertItem(item: ListedAlert, expanded: RwSignal<Option<String>>) -> impl IntoView {
@@ -70,6 +71,7 @@ pub fn AlertsScreen(open: Option<String>) -> impl IntoView {
 
     view! {
         <section class="alerts">
+            <XmasVignette kind=Vignette::Candle />
             <h2>"Mimořádnosti"</h2>
             {move || {
                 let items = list();

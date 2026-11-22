@@ -7,6 +7,7 @@ use pid_core::ride::{Ride, on_vehicle_changed};
 
 use crate::components::{DataBanner, RouteBadge, ride_color};
 use crate::screens::Search;
+use crate::season::XmasScene;
 use crate::state::{AppState, Screen};
 use crate::util::{hhmm, now_fixed};
 
@@ -27,6 +28,7 @@ fn Idle() -> impl IntoView {
     view! {
         <section class="home">
             <Search />
+            <XmasScene />
             <NewRideFab />
         </section>
     }
@@ -40,6 +42,7 @@ pub fn SearchScreen() -> impl IntoView {
         <DataBanner />
         <section class="home">
             <Search />
+            <XmasScene />
             <Show when=move || state.current_ride().is_none()>
                 <NewRideFab />
             </Show>
@@ -150,6 +153,7 @@ fn Running(ride: Ride) -> impl IntoView {
                     {move || if confirm_cancel.get() { "Opravdu zrušit? Klepněte znovu" } else { "Zrušit jízdu" }}
                 </button>
             </div>
+            <XmasScene />
         </section>
     }
 }

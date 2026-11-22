@@ -5,6 +5,7 @@ use pid_core::ride::Ride;
 
 use crate::components::{RideRow, day_label};
 use crate::state::AppState;
+use crate::season::{Vignette, XmasVignette};
 
 #[component]
 pub fn History() -> impl IntoView {
@@ -45,6 +46,7 @@ pub fn History() -> impl IntoView {
 
     view! {
         <section class="history">
+            <XmasVignette kind=Vignette::Gifts />
             <h2>"Historie"</h2>
             <div class="segmented">
                 <For each=persons key=|p| p.clone() let:p>

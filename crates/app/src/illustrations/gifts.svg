@@ -1,0 +1,8 @@
+<svg class="xmas-art" viewBox="0 0 64 64" aria-hidden="true">
+  <rect class="il-red" x="6" y="28" width="30" height="30" rx="3"/>
+  <rect class="il-gold" x="18" y="28" width="6" height="30"/><rect class="il-gold" x="6" y="40" width="30" height="6"/>
+  <path class="il-gold-s" fill="none" stroke-width="3" d="M21 28 C11 16 6 26 21 28 C36 16 31 26 21 28"/>
+  <rect class="il-green" x="36" y="38" width="22" height="20" rx="3"/>
+  <rect class="il-cream" x="45" y="38" width="4" height="20"/>
+  <path class="il-cream-s" fill="none" stroke-width="2.5" d="M47 38 C40 30 37 37 47 38 C57 30 54 37 47 38"/>
+</svg>

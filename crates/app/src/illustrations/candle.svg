@@ -1,0 +1,10 @@
+<svg class="xmas-art" viewBox="0 0 64 64" aria-hidden="true">
+  <ellipse class="il-glow" cx="32" cy="14" rx="12" ry="14"/>
+  <path class="il-gold" d="M32 4 C27 11 28 18 32 20 C36 18 37 11 32 4 Z"/>
+  <path class="il-cream" d="M32 11 C30 14 30 17 32 18 C34 17 34 14 32 11 Z"/>
+  <rect class="il-red" x="25" y="22" width="14" height="30" rx="2"/>
+  <rect class="il-cream" x="28" y="24" width="3" height="24" rx="1.5" opacity=".35"/>
+  <path class="il-green" d="M4 58 C10 48 20 46 30 52 C24 53 22 58 16 57 C12 60 8 57 4 58 Z"/>
+  <path class="il-green" d="M60 58 C54 48 44 46 34 52 C40 53 42 58 48 57 C52 60 56 57 60 58 Z"/>
+  <g class="il-red"><circle cx="29" cy="55" r="3.5"/><circle cx="35" cy="55" r="3.5"/><circle cx="32" cy="50.5" r="3.5"/></g>
+</svg>

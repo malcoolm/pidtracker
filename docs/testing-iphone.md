@@ -265,3 +265,16 @@ buildem v sobotu před 1. adventem (28. 11. 2026, 4:30) a běžná se vrátí bu
 - [ ] Z nové ikony se aplikace spustí bez lišty Safari; po přihlášení Googlem se jízdy načtou
       z tabulky.
 - [ ] Od 29. 12.: stejným postupem vraťte běžnou modrou ikonu.
+
+## Kontrolní bod L – vánoční ilustrace (#5)
+
+Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
+
+- [ ] Úvodní obrazovka (Spojení): pod tlačítkem Hledat je obrázek – rodina na pohovce,
+      stromek s dárky, za oknem sněží, kočka. Při posunu na konec ho nezakrývá tlačítko
+      „＋ Nová jízda“.
+- [ ] Probíhající jízda: obrázek je pod tlačítky Výstup / Zrušit jízdu, nic nepřekrývá.
+- [ ] Historie (dárky), Statistiky (stromek), Mimořádnosti (svíčka): malý obrázek vpravo vedle
+      nadpisu, nedotýká se přepínačů pod nadpisem.
+- [ ] Ve světlém i tmavém režimu jsou obrázky dobře vidět a text kolem zůstává čitelný.
+- [ ] `?halloween=1` a běžný vzhled obrázky nemají.

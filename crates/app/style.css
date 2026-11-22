@@ -598,6 +598,44 @@ html.vanoce .app { position: relative; z-index: 1; }
   from { translate: -10px 0; }
   to { translate: 10px 0; }
 }
+/* Vánoční ilustrace (#5): scéna na úvodní obrazovce a vinětky vedle nadpisů, v toku stránky
+   (nic nepřekrývají). Barvy přes proměnné, aby seděly ve světlém i tmavém režimu. */
+html.vanoce {
+  --il-wall: #f1e4cc; --il-floor: #dcc59d; --il-sky: #22344f; --il-frame: #8a5a3b;
+  --il-cream: #fffaf0; --il-snow: #ffffff; --il-trunk: #7a4a2a; --il-tree: #2f7d4a;
+  --il-red: #c4161f; --il-gold: #d4a33b; --il-green: #2f7d4a; --il-glow: rgba(212, 163, 59, .28);
+  --il-sofa: #2f5d7c; --il-sofa-front: #3a6f92; --il-cat: #6b6b72;
+  --il-sweater-a: #b3121b; --il-sweater-b: #1f5b3a; --il-sweater-c: #d4a33b;
+  --il-skin-a: #f2c9a8; --il-skin-b: #c98d64; --il-hair-a: #5a3a24; --il-hair-b: #2a1d16;
+  --il-hair-c: #a0602e; --il-face: #3a2a20; --il-cheek: #e8867a;
+}
+@media (prefers-color-scheme: dark) {
+  html.vanoce {
+    --il-wall: #1b2e23; --il-floor: #13221a; --il-sky: #0a1220; --il-frame: #6b4630;
+    --il-cream: #f3ede0; --il-tree: #3a9a5c; --il-green: #3a9a5c; --il-red: #d6303a;
+    --il-glow: rgba(233, 196, 106, .3); --il-sofa: #2a4f6a; --il-sofa-front: #335d7b; --il-cat: #8a8a92;
+    --il-sweater-b: #2f7d4a;
+  }
+}
+.xmas-scene { margin: 24px auto 0; max-width: 420px; }
+.xmas-scene svg { display: block; width: 100%; height: auto; }
+.xmas-corner { position: absolute; top: 2px; right: 0; width: 44px; height: 44px; pointer-events: none; }
+.xmas-corner svg { display: block; width: 100%; height: 100%; }
+.history, .stats, .alerts { position: relative; }
+html.vanoce :is(.history, .stats, .alerts) > h2 { padding-right: 56px; }
+.il-wall { fill: var(--il-wall); } .il-floor { fill: var(--il-floor); } .il-sky { fill: var(--il-sky); }
+.il-cream { fill: var(--il-cream); } .il-snow { fill: var(--il-snow); } .il-trunk { fill: var(--il-trunk); }
+.il-tree { fill: var(--il-tree); } .il-red { fill: var(--il-red); } .il-gold { fill: var(--il-gold); }
+.il-green { fill: var(--il-green); } .il-glow { fill: var(--il-glow); } .il-sofa { fill: var(--il-sofa); }
+.il-sofa-front { fill: var(--il-sofa-front); } .il-cat { fill: var(--il-cat); }
+.il-sweater-a { fill: var(--il-sweater-a); } .il-sweater-b { fill: var(--il-sweater-b); }
+.il-sweater-c { fill: var(--il-sweater-c); } .il-skin-a { fill: var(--il-skin-a); } .il-skin-b { fill: var(--il-skin-b); }
+.il-hair-a { fill: var(--il-hair-a); } .il-hair-b { fill: var(--il-hair-b); } .il-hair-c { fill: var(--il-hair-c); }
+.il-face { fill: var(--il-face); } .il-cheek { fill: var(--il-cheek); opacity: .6; }
+.il-frame-s { stroke: var(--il-frame); } .il-gold-s { stroke: var(--il-gold); } .il-cream-s { stroke: var(--il-cream); }
+.il-face-s { stroke: var(--il-face); } .il-cat-s { stroke: var(--il-cat); }
+.il-arm-a { stroke: var(--il-sweater-a); } .il-arm-b { stroke: var(--il-sweater-b); }
+
 /* „Omezit pohyb“: sníh zůstane, ale stojí. */
 @media (prefers-reduced-motion: reduce) {
   .snow-layer { animation: none; }

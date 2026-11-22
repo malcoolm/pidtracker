@@ -1,5 +1,5 @@
 //! Sezónní vzhled: třída `halloween` nebo `vanoce` na `<html>` (barvy a písmo v CSS),
-//! barva systémové lišty, halloweenské dekorace a vánoční sníh.
+//! barva systémové lišty, halloweenské dekorace, vánoční sníh a ilustrace.
 
 use leptos::prelude::*;
 use pid_core::season::{Season, season};
@@ -48,6 +48,54 @@ pub fn apply_season() -> Option<Season> {
         let _ = meta.set_attribute("content", if prefers_dark() { dark } else { light });
     }
     current
+}
+
+/// Sezóna sdílená s obrazovkami (přepočítává se při návratu do popředí).
+#[derive(Clone, Copy)]
+pub struct SeasonCtx(pub RwSignal<Option<Season>>);
+
+fn vanoce_signal() -> impl Fn() -> bool + Send + Sync + Copy + 'static {
+    let ctx = use_context::<SeasonCtx>();
+    move || ctx.is_some_and(|c| c.0.get() == Some(Season::Vanoce))
+}
+
+const SCENE_SVG: &str = include_str!("illustrations/scene.svg");
+const GIFTS_SVG: &str = include_str!("illustrations/gifts.svg");
+const TREE_SVG: &str = include_str!("illustrations/tree.svg");
+const CANDLE_SVG: &str = include_str!("illustrations/candle.svg");
+
+/// Vánoční scéna (rodina u stromku, za oknem sněží) v toku stránky; mimo Vánoce nic.
+#[component]
+pub fn XmasScene() -> impl IntoView {
+    let on = vanoce_signal();
+    view! {
+        <Show when=on>
+            <div class="xmas-scene" inner_html=SCENE_SVG></div>
+        </Show>
+    }
+}
+
+/// Malá vánoční vinětka vpravo vedle nadpisu obrazovky.
+#[derive(Clone, Copy)]
+pub enum Vignette {
+    Gifts,
+    Tree,
+    Candle,
+}
+
+#[component]
+pub fn XmasVignette(kind: Vignette) -> impl IntoView {
+    let on = vanoce_signal();
+    let svg = match kind {
+        Vignette::Gifts => GIFTS_SVG,
+        Vignette::Tree => TREE_SVG,
+        Vignette::Candle => CANDLE_SVG,
+    };
+    view! {
+        <Show when=on>
+            <div class="xmas-corner" aria-hidden="true" inner_html=svg></div>
+        </Show>
+    }
 }
 
 /// Padající sníh za obsahem: tři vrstvy vloček (vzdálené malé a pomalé, blízké větší

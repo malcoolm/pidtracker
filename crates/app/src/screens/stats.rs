@@ -5,6 +5,7 @@ use pid_core::stats::{Period, PeriodKind, PersonStats, StatsQuery, compute, comp
 
 use crate::state::AppState;
 use crate::util::{css_color, duration_label, kind_color, now};
+use crate::season::{Vignette, XmasVignette};
 
 #[derive(Clone, PartialEq)]
 enum Who {
@@ -51,6 +52,7 @@ pub fn Stats() -> impl IntoView {
 
     view! {
         <section class="stats">
+            <XmasVignette kind=Vignette::Tree />
             <h2>"Statistiky"</h2>
             <div class="segmented">
                 {[(PeriodKind::Week, "Týden"), (PeriodKind::Month, "Měsíc"), (PeriodKind::Year, "Rok"), (PeriodKind::All, "Celkem")]
