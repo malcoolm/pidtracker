@@ -538,6 +538,71 @@ html.vanoce :is(.menu-item, .primary, .secondary) { font-size: 19px; }
 html.vanoce :is(.jc-label, .tag) { font-size: 1.1em; }
 html.vanoce .huge { font-size: 24px; }
 
+/* Padající sníh za obsahem. Každá vrstva je dlaždice vloček (radiální gradienty) o výšku
+   dlaždice vyšší než okno a posouvá se o jednu dlaždici dolů, takže smyčka je plynulá.
+   Animuje se jen transform/translate (kompozitor, bez překreslování); na dotyk nereaguje. */
+html.vanoce { --snow: rgba(150, 175, 192, .75); }
+@media (prefers-color-scheme: dark) {
+  html.vanoce { --snow: rgba(255, 255, 255, .8); }
+}
+html.vanoce .app { position: relative; z-index: 1; }
+.snow { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.snow-layer {
+  position: absolute;
+  left: -16px;
+  right: -16px;
+  bottom: 0;
+  top: calc(-1 * var(--tile));
+  background-size: var(--tile) var(--tile);
+  will-change: transform;
+}
+.snow-far {
+  --tile: 180px;
+  animation: snow-fall-far 24s linear infinite, snow-sway 7s ease-in-out infinite alternate;
+  opacity: .6;
+  background-image:
+    radial-gradient(circle at 12px 20px, var(--snow) 1.2px, transparent 1.8px),
+    radial-gradient(circle at 70px 64px, var(--snow) 1.2px, transparent 1.8px),
+    radial-gradient(circle at 140px 30px, var(--snow) 1.2px, transparent 1.8px),
+    radial-gradient(circle at 40px 120px, var(--snow) 1.2px, transparent 1.8px),
+    radial-gradient(circle at 110px 150px, var(--snow) 1.2px, transparent 1.8px),
+    radial-gradient(circle at 166px 104px, var(--snow) 1.2px, transparent 1.8px),
+    radial-gradient(circle at 92px 8px, var(--snow) 1.2px, transparent 1.8px);
+}
+.snow-mid {
+  --tile: 260px;
+  animation: snow-fall-mid 16s linear -4s infinite, snow-sway 5s ease-in-out -2s infinite alternate;
+  opacity: .75;
+  background-image:
+    radial-gradient(circle at 30px 50px, var(--snow) 2px, transparent 2.8px),
+    radial-gradient(circle at 150px 20px, var(--snow) 2px, transparent 2.8px),
+    radial-gradient(circle at 220px 130px, var(--snow) 2px, transparent 2.8px),
+    radial-gradient(circle at 90px 190px, var(--snow) 2px, transparent 2.8px),
+    radial-gradient(circle at 190px 236px, var(--snow) 2px, transparent 2.8px);
+}
+.snow-near {
+  --tile: 380px;
+  animation: snow-fall-near 11s linear -7s infinite, snow-sway 4s ease-in-out -1s infinite alternate;
+  opacity: .9;
+  background-image:
+    radial-gradient(circle at 60px 90px, var(--snow) 3px, transparent 4px),
+    radial-gradient(circle at 290px 40px, var(--snow) 3px, transparent 4px),
+    radial-gradient(circle at 200px 250px, var(--snow) 3px, transparent 4px),
+    radial-gradient(circle at 340px 330px, var(--snow) 3px, transparent 4px);
+}
+/* Posun = --tile dané vrstvy (var() v @keyframes starší Safari neumí). */
+@keyframes snow-fall-far { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 180px, 0); } }
+@keyframes snow-fall-mid { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 260px, 0); } }
+@keyframes snow-fall-near { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 380px, 0); } }
+@keyframes snow-sway {
+  from { translate: -10px 0; }
+  to { translate: 10px 0; }
+}
+/* „Omezit pohyb“: sníh zůstane, ale stojí. */
+@media (prefers-reduced-motion: reduce) {
+  .snow-layer { animation: none; }
+}
+
 /* Řádek odjezdu s tlačítkem detailu */
 .dep-item { display: flex; align-items: stretch; gap: 4px; }
 .dep-item .dep-row { flex: 1; min-width: 0; width: auto; }

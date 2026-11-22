@@ -239,3 +239,15 @@ neumí; vzhled v ní uvidíte až od 28. 11.).
 - [ ] `?halloween=1` vypadá jako o Halloweenu (tmavý vzhled, pavouk, 🎃).
 - [ ] Bez parametru (před 28. 11.) běžný vzhled; barva systémové lišty nahoře je červená
       (ve tmavém režimu tmavě šedá), ne modrá.
+
+## Kontrolní bod J – padající sníh (#6)
+
+Stejně jako u bodu I: do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
+
+- [ ] Za obsahem padá sníh (ve světlém režimu šedomodré vločky, v tmavém bílé); přes karty,
+      tlačítka ani horní lištu nepadá.
+- [ ] Klepání na tlačítka, karty a pole funguje jako bez sněhu; posouvání stránky je plynulé
+      i na starším iPhonu a telefon se nezahřívá víc než obvykle.
+- [ ] Zapněte Nastavení → Zpřístupnění → Pohyb → **Omezit pohyb**: vločky zůstanou stát
+      (žádný pohyb). Po vypnutí zase padají.
+- [ ] `?halloween=1` a běžný vzhled sníh nemají.

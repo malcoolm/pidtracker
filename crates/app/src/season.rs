@@ -1,5 +1,5 @@
 //! Sezónní vzhled: třída `halloween` nebo `vanoce` na `<html>` (barvy a písmo v CSS),
-//! barva systémové lišty a halloweenské dekorace.
+//! barva systémové lišty, halloweenské dekorace a vánoční sníh.
 
 use leptos::prelude::*;
 use pid_core::season::{Season, season};
@@ -48,6 +48,19 @@ pub fn apply_season() -> Option<Season> {
         let _ = meta.set_attribute("content", if prefers_dark() { dark } else { light });
     }
     current
+}
+
+/// Padající sníh za obsahem: tři vrstvy vloček (vzdálené malé a pomalé, blízké větší
+/// a rychlejší). Jen CSS animace transformací, neklikatelné; při „Omezit pohyb“ stojí.
+#[component]
+pub fn Snow() -> impl IntoView {
+    view! {
+        <div class="snow" aria-hidden="true">
+            <div class="snow-layer snow-far"></div>
+            <div class="snow-layer snow-mid"></div>
+            <div class="snow-layer snow-near"></div>
+        </div>
+    }
 }
 
 /// Siluety: pavučina s pavoukem, čarodějnice na koštěti, kostlivci. Jen dekorace, neklikatelné.

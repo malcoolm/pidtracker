@@ -5,7 +5,7 @@ use leptos::task::spawn_local;
 
 use crate::components::Toast;
 use crate::config::{APP_VERSION, BUILD_ID};
-use crate::season::{HalloweenDeco, apply_season};
+use crate::season::{HalloweenDeco, Snow, apply_season};
 use pid_core::season::Season;
 use crate::screens::{AlertsScreen, Alight, Board, Edit, History, Home, Onboarding, SearchScreen, Settings, Stats};
 use crate::state::{AppState, Screen};
@@ -59,6 +59,9 @@ pub fn App() -> impl IntoView {
         <Toast />
         <Show when=move || season.get() == Some(Season::Halloween)>
             <HalloweenDeco />
+        </Show>
+        <Show when=move || season.get() == Some(Season::Vanoce)>
+            <Snow />
         </Show>
     }
 }
