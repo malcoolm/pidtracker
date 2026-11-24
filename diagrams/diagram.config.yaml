@@ -1,0 +1,321 @@
+# diagram.config.yaml: how your Blueprint Deck should be generated (made with the Blueprint Deck configurator).
+# Put it in <your repo>/diagrams/ and ask your agent: "/blueprint-deck diagrams/diagram.config.yaml".
+# Every key is explained in the kit's annotated template: plugins/blueprint-deck/skills/blueprint-deck/templates/diagram.config.yaml
+version: 2
+
+# ---------------------------------------------------------------- shared by every diagram in the file
+project:
+  name: "PID Tracker"
+  subtitle: "App overview"
+  maturity: partly-built
+  one_liner: "PID Tracker is personal tracker of Prague transport commutes ... with schedule and route as bonus"
+
+branding:
+  website: "pid.cz"
+  theme: midnight
+  primary: ""
+  secondary: ""
+  shape: rounded
+  logo: ""
+  name_rules: []
+
+sources:
+  include:
+    - "docs/**/*.md"
+    - "README.md"
+    - "src/**"
+    - "services/**"
+    - "apps/**"
+    - "**/*.proto"
+    - "**/openapi*.{yaml,yml,json}"
+    - "docker-compose*.yml"
+    - "k8s/**"
+    - "kubernetes/**"
+    - "helm/**"
+    - "package.json"
+    - "go.mod"
+    - "pyproject.toml"
+  exclude:
+    - "**/node_modules/**"
+    - "**/vendor/**"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/*.test.*"
+    - "**/*_test.go"
+    - "**/test/**"
+    - "**/tests/**"
+  priority: []
+  derive_status_from:
+    - "k8s/"
+    - "kubernetes/"
+    - "helm/"
+    - "docker-compose.yml"
+  on_conflict: report
+  cite_sources: true
+  invent: never
+
+behaviour:
+  hero: true
+  tour_position: auto
+  zoom_to_focus: true
+  edges_filter_by_view: true
+  edge_labels: focus
+  particles: main-flow
+  overview_edges: all
+  legend: collapsed
+  editor: true
+  credit: true
+  keyboard: true
+
+workflow:
+  confirm_structure: true
+  pause_after_extract: false
+  output: "index.html"
+  read_only_copy: false
+
+# ---------------------------------------------------------------- one entry per diagram (several entries = one file with a switcher)
+diagrams:
+  - id: usecases
+    name: "Platform"
+    type: journey
+    viewpoint: technical
+    focus: ""
+    audience:
+      who:
+        - executives
+        - architects
+        - engineers
+        - business
+        - customers
+      goal: "Understand how the platform is built and run, and why each technology was chosen"
+      tone: technical
+      language: en
+    sources: {}
+    map:
+      detail: medium
+      external: true
+      customer_owned: true
+      frame_label: ""
+      technology: full
+      must_show: []
+      leave_out: []
+      status:
+        enabled: true
+        meaning: scope
+        values: []
+      notes: ""
+    personas:
+      enabled: true
+      names: []
+      on_map: false
+    views:
+      presets:
+        - main-flow
+        - governance
+        - operations
+        - deployment
+      custom: []
+    tour:
+      enabled: true
+      steps: "8-12"
+      story: component-walk
+      use_case: ""
+      opening: problem
+      closing: why-this
+      include:
+        - roadmap
+        - options
+        - open-questions
+      notes: ""
+    overlays:
+      roadmap:
+        enabled: true
+        source: ""
+      options:
+        enabled: false
+        title: ""
+        source: ""
+      custom: []
+    comments: ""
+
+  - id: architecture
+    name: "Diagram 2"
+    type: architecture
+    viewpoint: technical
+    focus: ""
+    audience:
+      who:
+        - architects
+        - engineers
+      goal: "Understand how the platform is built and run, and why each technology was chosen"
+      tone: technical
+      language: en
+    sources: {}
+    map:
+      detail: medium
+      external: true
+      customer_owned: true
+      frame_label: ""
+      technology: full
+      must_show: []
+      leave_out: []
+      status:
+        enabled: true
+        meaning: scope
+        values: []
+      notes: ""
+    personas:
+      enabled: true
+      names: []
+      on_map: false
+    views:
+      presets:
+        - main-flow
+        - governance
+        - operations
+        - deployment
+      custom: []
+    tour:
+      enabled: true
+      steps: "8-12"
+      story: component-walk
+      use_case: ""
+      opening: problem
+      closing: why-this
+      include:
+        - roadmap
+        - options
+        - open-questions
+      notes: ""
+    overlays:
+      roadmap:
+        enabled: true
+        source: ""
+      options:
+        enabled: false
+        title: ""
+        source: ""
+      custom: []
+    comments: ""
+
+  - id: data-flow
+    name: "Diagram 3"
+    type: data-flow
+    viewpoint: technical
+    focus: ""
+    audience:
+      who:
+        - architects
+        - engineers
+      goal: "Understand how the platform is built and run, and why each technology was chosen"
+      tone: technical
+      language: en
+    sources: {}
+    map:
+      detail: medium
+      external: true
+      customer_owned: true
+      frame_label: ""
+      technology: full
+      must_show: []
+      leave_out: []
+      status:
+        enabled: true
+        meaning: scope
+        values: []
+      notes: ""
+    personas:
+      enabled: true
+      names: []
+      on_map: false
+    views:
+      presets:
+        - main-flow
+        - governance
+        - operations
+        - deployment
+      custom: []
+    tour:
+      enabled: true
+      steps: "8-12"
+      story: component-walk
+      use_case: ""
+      opening: problem
+      closing: why-this
+      include:
+        - roadmap
+        - options
+        - open-questions
+      notes: ""
+    overlays:
+      roadmap:
+        enabled: true
+        source: ""
+      options:
+        enabled: false
+        title: ""
+        source: ""
+      custom: []
+    comments: ""
+
+  - id: processes
+    name: "Diagram 4"
+    type: process
+    viewpoint: mixed
+    focus: ""
+    audience:
+      who:
+        - executives
+        - architects
+      goal: "Understand what the platform does and the technology underneath it"
+      tone: executive
+      language: en
+    sources: {}
+    map:
+      detail: medium
+      external: true
+      customer_owned: true
+      frame_label: ""
+      technology: pick
+      must_show: []
+      leave_out: []
+      status:
+        enabled: true
+        meaning: scope
+        values: []
+      notes: ""
+    personas:
+      enabled: true
+      names: []
+      on_map: false
+    views:
+      presets:
+        - main-flow
+        - governance
+        - operations
+        - deployment
+      custom: []
+    tour:
+      enabled: true
+      steps: "12-18"
+      story: problem-solution
+      use_case: ""
+      opening: problem
+      closing: why-this
+      include:
+        - roadmap
+        - options
+        - open-questions
+      notes: ""
+    overlays:
+      roadmap:
+        enabled: true
+        source: ""
+      options:
+        enabled: false
+        title: ""
+        source: ""
+      custom: []
+    comments: ""
+
+comments: ""
