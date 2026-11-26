@@ -278,3 +278,11 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
       nadpisu, nedotýká se přepínačů pod nadpisem.
 - [ ] Ve světlém i tmavém režimu jsou obrázky dobře vidět a text kolem zůstává čitelný.
 - [ ] `?halloween=1` a běžný vzhled obrázky nemají.
+
+## Kontrolní bod M – číslo linky uprostřed štítku (#2)
+
+- [ ] Detail spojení (Spojení → Hledat → klepnout na spojení): číslo linky ve štítku vedle
+      názvu zastávky je svisle i vodorovně uprostřed.
+- [ ] Totéž na kartě spojení, v odjezdech, v historii a v pruhu Mimořádností.
+- [ ] Jednoznakové (`C`, `A`) i delší (`S49`, `X-A`, `119`) linky, ve světlém i tmavém režimu
+      a s `?vanoce=1`.

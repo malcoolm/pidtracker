@@ -800,7 +800,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; padding
 .jd-rail .dot { position: absolute; left: 1px; top: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 3px solid var(--fg); box-sizing: border-box; }
 .jd-body { padding: 5px 0 6px; min-width: 0; }
 .jd-name { font-size: 15px; overflow-wrap: anywhere; }
-.jd-name .badge { display: inline-block; vertical-align: baseline; }
+.jd-name .badge { vertical-align: middle; }
 .jd-sub { font-size: 13px; color: var(--muted); }
 .jd-exp { color: var(--accent-text); font-size: 14px; font-weight: 600; padding: 4px 0 8px; min-height: 36px; }
 .jd-row.exp .jd-rail { min-height: 0; }
