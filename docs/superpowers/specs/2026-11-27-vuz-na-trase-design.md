@@ -14,7 +14,7 @@ mezi dvě zastávky to neříká.
   pod ním menším „autobus 1956 za Pod Královkou · před 20 s“.
   - Minuty = čas příjezdu na mou zastávku podle jízdního řádu a zpoždění (stejný údaj jako
     „za N min“ u zastávky), zastávky = kolik zastávek zbývá od vozu k mé zastávce.
-  - Vůz do 50 m před mou zastávkou → „přijíždí“; vůz na mé zastávce → „ve stanici“.
+  - Vůz do 200 m před mou zastávkou → „přijíždí“; vůz do 50 m od ní → „ve stanici“ (upraveno 27. 11.: do 50 m už je vůz „na zastávce“).
   - Vůz už mou zastávku projel → „vůz už odjel“.
 - **Značka vozu na čáře trasy**: kolečko v barvě linky s bílým obrysem a **vlastním
   piktogramem podle druhu dopravy linky** (autobus, tramvaj se sběračem, trolejbus se dvěma
