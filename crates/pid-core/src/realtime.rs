@@ -331,6 +331,48 @@ pub fn segment_progress(stops: &[(f64, f64)], fix: &VehicleFix, i: usize) -> f32
     }
 }
 
+/// Nejkratší jízdní doba úseku pro odhad (#15); chrání před nulovou dobou ve stejné minutě.
+pub const MIN_SEGMENT_S: i64 = 30;
+/// Od kolika sekund po GPS poloze ukazuje značka odhad (#15).
+pub const ESTIMATE_AFTER_S: i64 = 10;
+
+/// Odhad, kde vůz je v čase `now_ts` (#15): z GPS místa (`place`, `progress` u `Between`) v čase
+/// `fix_ts` se posouvá podle jízdních dob mezi zastávkami (`stop_times` = unixové časy zastávek
+/// trasy, jízdní řád + zpoždění). Nikdy nejede za další zastávku (podíl úseku nejvýš 1).
+/// Na zastávce stojí do odjezdu, pak se rozjede. Bez `fix_ts` nebo s polohou „z budoucnosti“
+/// vrací vstup beze změny.
+pub fn estimate_place(place: VehiclePlace, progress: f32, stop_times: &[i64], fix_ts: Option<i64>, now_ts: i64) -> (VehiclePlace, f32) {
+    let unchanged = (place, progress);
+    let Some(fix_ts) = fix_ts else { return unchanged };
+    if now_ts <= fix_ts {
+        return unchanged;
+    }
+    let duration = |i: usize| match (stop_times.get(i), stop_times.get(i + 1)) {
+        (Some(a), Some(b)) => Some((b - a).max(MIN_SEGMENT_S)),
+        _ => None,
+    };
+    match place {
+        VehiclePlace::Between(i) => match duration(i) {
+            Some(d) => (place, (progress + (now_ts - fix_ts) as f32 / d as f32).min(1.0)),
+            None => unchanged,
+        },
+        VehiclePlace::AtStop(i) => {
+            let (Some(d), Some(&dep)) = (duration(i), stop_times.get(i)) else { return unchanged };
+            let start = fix_ts.max(dep);
+            if now_ts <= start {
+                (place, 0.0)
+            } else {
+                (VehiclePlace::Between(i), ((now_ts - start) as f32 / d as f32).min(1.0))
+            }
+        }
+    }
+}
+
+/// Ukazuje značka odhad (od GPS polohy uplynulo aspoň [`ESTIMATE_AFTER_S`])?
+pub fn is_estimate(fix_ts: Option<i64>, now_ts: i64) -> bool {
+    fix_ts.is_some_and(|f| now_ts - f >= ESTIMATE_AFTER_S)
+}
+
 /// Do této vzdálenosti před mou zastávkou vůz „přijíždí“ (#13; do 50 m už je na zastávce).
 pub const ARRIVING_M: f64 = 200.0;
 
@@ -784,5 +826,70 @@ mod arrival_tests {
         let r = route();
         assert_eq!(arrival_state(&r, &fix_at(50.0), VehiclePlace::AtStop(0), 0), ArrivalState::AtStop);
         assert_eq!(arrival_state(&r, &fix_at(50.0 + 0.5 * STEP), VehiclePlace::Between(0), 0), ArrivalState::Departed);
+    }
+}
+
+#[cfg(test)]
+mod estimate_tests {
+    use super::*;
+
+    const FIX: i64 = 1_000;
+    /// Časy zastávek: 0, 120, 240, 300 s od FIX.
+    fn times() -> Vec<i64> {
+        [0, 120, 240, 300].iter().map(|t| FIX + t).collect()
+    }
+
+    #[test]
+    fn between_moves_with_time() {
+        let (pl, p) = estimate_place(VehiclePlace::Between(0), 0.25, &times(), Some(FIX), FIX + 60);
+        assert_eq!(pl, VehiclePlace::Between(0));
+        assert!((p - 0.75).abs() < 0.01, "{p}");
+    }
+
+    #[test]
+    fn between_capped_at_next_stop() {
+        let (pl, p) = estimate_place(VehiclePlace::Between(0), 0.25, &times(), Some(FIX), FIX + 600);
+        assert_eq!((pl, p), (VehiclePlace::Between(0), 1.0));
+    }
+
+    #[test]
+    fn at_stop_waits_for_departure() {
+        let t1 = FIX + 120;
+        let r = estimate_place(VehiclePlace::AtStop(1), 0.0, &times(), Some(t1 - 30), t1 - 10);
+        assert_eq!(r, (VehiclePlace::AtStop(1), 0.0));
+        let (pl, p) = estimate_place(VehiclePlace::AtStop(1), 0.0, &times(), Some(t1 - 30), t1 + 60);
+        assert_eq!(pl, VehiclePlace::Between(1));
+        assert!((p - 0.5).abs() < 0.01, "{p}");
+    }
+
+    #[test]
+    fn last_stop_stays() {
+        let r = estimate_place(VehiclePlace::AtStop(3), 0.0, &times(), Some(FIX), FIX + 900);
+        assert_eq!(r, (VehiclePlace::AtStop(3), 0.0));
+    }
+
+    #[test]
+    fn min_segment_duration() {
+        // Nulová (i záporná) jízdní doba úseku se bere jako 30 s.
+        let same = [FIX, FIX, FIX - 60];
+        let (_, p) = estimate_place(VehiclePlace::Between(0), 0.0, &same, Some(FIX), FIX + 15);
+        assert!((p - 0.5).abs() < 0.01, "{p}");
+        let (_, p) = estimate_place(VehiclePlace::Between(1), 0.0, &same, Some(FIX), FIX + 15);
+        assert!((p - 0.5).abs() < 0.01, "{p}");
+    }
+
+    #[test]
+    fn no_timestamp_or_future_fix() {
+        let r = estimate_place(VehiclePlace::Between(0), 0.25, &times(), None, FIX + 60);
+        assert_eq!(r, (VehiclePlace::Between(0), 0.25));
+        let r = estimate_place(VehiclePlace::Between(0), 0.25, &times(), Some(FIX + 100), FIX);
+        assert_eq!(r, (VehiclePlace::Between(0), 0.25));
+    }
+
+    #[test]
+    fn estimate_flag() {
+        assert!(!is_estimate(Some(100), 109));
+        assert!(is_estimate(Some(100), 110));
+        assert!(!is_estimate(None, 500));
     }
 }
