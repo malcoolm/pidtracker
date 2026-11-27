@@ -300,22 +300,66 @@ fn nearest_segment(
     fix: &VehicleFix,
     segments: std::ops::RangeInclusive<usize>,
 ) -> Option<(usize, f64)> {
-    // Ekvirektangulární projekce kolem polohy vozu (metry).
-    let k = 111_320.0;
-    let cos = fix.lat.to_radians().cos();
-    let xy = |(lat, lon): (f64, f64)| ((lon - fix.lon) * k * cos, (lat - fix.lat) * k);
     let mut best: Option<(usize, f64)> = None;
     for i in segments.filter(|i| i + 1 < stops.len()) {
-        let (a, b) = (xy(stops[i]), xy(stops[i + 1]));
-        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
-        let len2 = dx * dx + dy * dy;
-        let t = if len2 > 0.0 { (-(a.0 * dx + a.1 * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-        let d = (a.0 + t * dx).hypot(a.1 + t * dy);
+        let (_, d) = project(stops[i], stops[i + 1], fix);
         if best.is_none_or(|(_, bd)| d < bd) {
             best = Some((i, d));
         }
     }
     best
+}
+
+/// Promítnutí polohy vozu na úsečku `a → b`: (podíl úseku 0–1, vzdálenost od úsečky v m).
+/// Ekvirektangulární projekce kolem polohy vozu; úsek nulové délky → podíl 0.
+fn project(a: (f64, f64), b: (f64, f64), fix: &VehicleFix) -> (f64, f64) {
+    let k = 111_320.0;
+    let cos = fix.lat.to_radians().cos();
+    let xy = |(lat, lon): (f64, f64)| ((lon - fix.lon) * k * cos, (lat - fix.lat) * k);
+    let (a, b) = (xy(a), xy(b));
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 > 0.0 { (-(a.0 * dx + a.1 * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    (t, (a.0 + t * dx).hypot(a.1 + t * dy))
+}
+
+/// Jakou část úseku `i → i+1` vůz ujel (0–1, #13). Úsek mimo trasu nebo nulové délky → 0.
+pub fn segment_progress(stops: &[(f64, f64)], fix: &VehicleFix, i: usize) -> f32 {
+    match (stops.get(i), stops.get(i + 1)) {
+        (Some(&a), Some(&b)) => project(a, b, fix).0 as f32,
+        _ => 0.0,
+    }
+}
+
+/// Do této vzdálenosti před mou zastávkou vůz „přijíždí“ (#13; do 50 m už je na zastávce).
+pub const ARRIVING_M: f64 = 200.0;
+
+/// Kde je vůz vůči mé (nástupní) zastávce.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArrivalState {
+    /// Kolik zastávek zbývá k mé zastávce (včetně ní).
+    StopsAway(usize),
+    Arriving,
+    AtStop,
+    Departed,
+}
+
+/// Stav příjezdu vozu na zastávku `board` (index v `stops`).
+pub fn arrival_state(stops: &[(f64, f64)], fix: &VehicleFix, place: VehiclePlace, board: usize) -> ArrivalState {
+    match place {
+        VehiclePlace::AtStop(i) if i == board => ArrivalState::AtStop,
+        VehiclePlace::AtStop(i) if i > board => ArrivalState::Departed,
+        VehiclePlace::Between(i) if i >= board => ArrivalState::Departed,
+        VehiclePlace::Between(i)
+            if i + 1 == board
+                && stops
+                    .get(board)
+                    .is_some_and(|&(lat, lon)| crate::geo::haversine_m(fix.lat, fix.lon, lat, lon) <= ARRIVING_M) =>
+        {
+            ArrivalState::Arriving
+        }
+        VehiclePlace::AtStop(i) | VehiclePlace::Between(i) => ArrivalState::StopsAway(board - i),
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -677,5 +721,68 @@ mod freshness_tests {
     fn unknown_or_future_timestamp_is_fresh() {
         assert_eq!(fix_freshness(None, 1_000), FixFreshness::Fresh);
         assert_eq!(fix_freshness(Some(2_000), 1_000), FixFreshness::Fresh);
+    }
+}
+
+#[cfg(test)]
+mod arrival_tests {
+    use super::*;
+
+    /// 4 zastávky po ~500 m na sever.
+    const STEP: f64 = 500.0 / 111_320.0;
+    fn route() -> Vec<(f64, f64)> {
+        (0..4).map(|i| (50.0 + i as f64 * STEP, 14.4)).collect()
+    }
+    fn fix_at(lat: f64) -> VehicleFix {
+        VehicleFix { label: Some("1956".into()), lat, lon: 14.4, stop_sequence: None, timestamp: None }
+    }
+
+    #[test]
+    fn progress_half_way() {
+        let r = route();
+        let p = segment_progress(&r, &fix_at(50.0 + 1.5 * STEP), 1);
+        assert!((p - 0.5).abs() < 0.05, "{p}");
+    }
+
+    #[test]
+    fn progress_zero_length_segment() {
+        let r = vec![(50.0, 14.4), (50.0, 14.4)];
+        let p = segment_progress(&r, &fix_at(50.001), 0);
+        assert_eq!(p, 0.0);
+        assert_eq!(segment_progress(&r, &fix_at(50.0), 5), 0.0);
+    }
+
+    #[test]
+    fn state_stops_away() {
+        let r = route();
+        assert_eq!(arrival_state(&r, &fix_at(50.0 + 0.5 * STEP), VehiclePlace::Between(0), 2), ArrivalState::StopsAway(2));
+    }
+
+    #[test]
+    fn state_arriving() {
+        let r = route();
+        let before = |m: f64| fix_at(50.0 + 2.0 * STEP - m / 111_320.0);
+        assert_eq!(arrival_state(&r, &before(150.0), VehiclePlace::Between(1), 2), ArrivalState::Arriving);
+        assert_eq!(arrival_state(&r, &before(300.0), VehiclePlace::Between(1), 2), ArrivalState::StopsAway(1));
+    }
+
+    #[test]
+    fn state_at_stop() {
+        let r = route();
+        assert_eq!(arrival_state(&r, &fix_at(50.0 + 2.0 * STEP), VehiclePlace::AtStop(2), 2), ArrivalState::AtStop);
+    }
+
+    #[test]
+    fn state_departed() {
+        let r = route();
+        assert_eq!(arrival_state(&r, &fix_at(50.0 + 2.5 * STEP), VehiclePlace::Between(2), 2), ArrivalState::Departed);
+        assert_eq!(arrival_state(&r, &fix_at(50.0 + 3.0 * STEP), VehiclePlace::AtStop(3), 2), ArrivalState::Departed);
+    }
+
+    #[test]
+    fn state_board_first() {
+        let r = route();
+        assert_eq!(arrival_state(&r, &fix_at(50.0), VehiclePlace::AtStop(0), 0), ArrivalState::AtStop);
+        assert_eq!(arrival_state(&r, &fix_at(50.0 + 0.5 * STEP), VehiclePlace::Between(0), 0), ArrivalState::Departed);
     }
 }
