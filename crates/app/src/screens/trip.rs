@@ -75,7 +75,11 @@ fn summary_text(state: Option<ArrivalState>, minutes: Option<i64>) -> String {
             Some(w) => format!("{w} · {}", stops_text(n)),
             None => stops_text(n),
         },
-        None => when.unwrap_or_default(),
+        // Bez polohy vozu po odjezdu podle jízdního řádu: „odjezd před N min“, ne „teď“ donekonečna.
+        None => match minutes {
+            Some(m) if m < 0 => format!("odjezd před {} min", -m),
+            _ => when.unwrap_or_default(),
+        },
     }
 }
 
@@ -343,6 +347,8 @@ mod tests {
         assert_eq!(summary_text(Some(ArrivalState::Departed), Some(-2)), "vůz už odjel");
         assert_eq!(summary_text(None, Some(5)), "za 5 min");
         assert_eq!(summary_text(None, Some(0)), "teď");
+        // Bez polohy vozu a po odjezdu: ne „teď“ donekonečna (jako „před N min“ u zastávky).
+        assert_eq!(summary_text(None, Some(-8)), "odjezd před 8 min");
         assert_eq!(summary_text(Some(ArrivalState::StopsAway(2)), None), "2 zastávky");
     }
 

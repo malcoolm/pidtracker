@@ -697,7 +697,8 @@ html.vanoce :is(.history, .stats, .alerts) > h2 { padding-right: 56px; }
 .trip-stop.board { font-weight: 700; }
 .trip-stop.board::before { background: var(--line, var(--accent)); }
 .trip-stop .here { display: block; font-weight: 400; font-size: 13px; color: var(--accent-text); }
-.trip-stop.passed { opacity: .5; }
+/* Projeté zastávky: zešedne text a tečka, ne překryv čáry (ten má vlastní průhlednost). */
+.trip-stop.passed > :not(.rail-fade):not(.veh-mark), .trip-stop.passed::before { opacity: .5; }
 .trip-more { display: block; width: 100%; text-align: left; color: var(--muted); padding: 10px 0; min-height: 44px; }
 .trip-stop::before { z-index: 1; }
 /* Souhrn nad trasou (#13): za kolik přijede a kde je vůz. */
