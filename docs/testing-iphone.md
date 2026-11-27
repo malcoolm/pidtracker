@@ -351,3 +351,15 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
       „ve stanici“ a značka je místo tečky zastávky; po odjezdu „vůz už odjel“.
 - [ ] Režim letadlo: po 2 min značka i souhrn zešednou, po 10 min vůz zmizí.
 - [ ] Světlý i tmavý režim, vánoční vzhled.
+
+## Kontrolní bod U – plynulý pohyb vozu (#15)
+
+- [ ] Odjezdy → `›` u jedoucího spoje: značka vozu se mezi staženími posouvá plynule
+      (každou sekundu kousek), ne skokem po ~20 s.
+- [ ] Asi 10 s po GPS poloze má značka čárkovaný obrys a souhrn píše „odhad, GPS před N s“;
+      po stažení nové polohy je obrys zase plný.
+- [ ] Značka nikdy nepřejede další zastávku, dokud ji nepotvrdí nová poloha (počká na konci
+      mezery).
+- [ ] Vůz stojící na zastávce se rozjede až po odjezdu podle jízdního řádu a zpoždění.
+- [ ] Režim letadlo: po 2 min značka zešedne a přestane se hýbat.
+- [ ] Telefon se nezahřívá a baterie neubývá znatelně rychleji než dřív.

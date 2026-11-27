@@ -8,8 +8,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::alerts::ServiceAlert;
 use pid_core::realtime::{
-    ArrivalState, Delays, FixFreshness, VehicleFix, VehiclePlace, arrival_state, fix_freshness, place_vehicle,
-    segment_progress,
+    ArrivalState, Delays, FixFreshness, VehicleFix, VehiclePlace, arrival_state, estimate_place, fix_freshness,
+    is_estimate, place_vehicle, segment_progress,
 };
 use pid_core::ride::RouteKind;
 use pid_core::timetable::query::{BoardRow, TripRoute, stops_text};
@@ -23,6 +23,8 @@ const CONTEXT_BEFORE: usize = 2;
 const CONTEXT_AFTER: usize = 5;
 /// Jak často se přepočítá stáří polohy, i když nová data nepřišla (offline).
 const TICK_MS: u32 = 15_000;
+/// Jak často se posouvá odhadovaná poloha značky (#15).
+const MOVE_TICK_MS: u32 = 1_000;
 
 /// „před 20 s“ / „před 3 min“ podle časové značky polohy.
 fn age_label(timestamp: Option<i64>, now_ts: i64) -> Option<String> {
@@ -43,7 +45,7 @@ fn kind_word(kind: RouteKind) -> &'static str {
 }
 
 /// Druhý řádek souhrnu: „autobus 1956 · za zastávkou Pod Královkou · před 20 s“.
-fn vehicle_text(kind: RouteKind, fix: &VehicleFix, place: Option<&str>, now_ts: i64) -> String {
+fn vehicle_text(kind: RouteKind, fix: &VehicleFix, place: Option<&str>, now_ts: i64, estimate: bool) -> String {
     let mut s = kind_word(kind).to_string();
     if let Some(l) = &fix.label {
         s.push(' ');
@@ -55,8 +57,10 @@ fn vehicle_text(kind: RouteKind, fix: &VehicleFix, place: Option<&str>, now_ts: 
     }
     if let Some(age) = age_label(fix.timestamp, now_ts) {
         s.push_str(" · ");
-        if fix_freshness(fix.timestamp, now_ts) == FixFreshness::Stale {
-            s.push_str("poloha ");
+        match fix_freshness(fix.timestamp, now_ts) {
+            FixFreshness::Stale => s.push_str("poloha "),
+            _ if estimate => s.push_str("odhad, GPS "),
+            _ => {}
         }
         s.push_str(&age);
     }
@@ -135,18 +139,27 @@ pub fn TripDetail(
         state.positions.track();
         at.set(now());
     });
-    // Stáří polohy roste i bez nových dat (offline), proto hodiny tikají samy.
+    // Hodiny: `now_s` po 1 s jen pro posun značky (#15), `at` po 15 s pro časy a stáří polohy
+    // (i offline bez nových dat). Seznam zastávek se tak nepřekresluje každou sekundu.
+    let now_s = RwSignal::new(now().timestamp());
     {
         let alive = Arc::new(AtomicBool::new(true));
         let flag = alive.clone();
         on_cleanup(move || flag.store(false, Ordering::Relaxed));
         spawn_local(async move {
+            let mut ticks = 0u32;
             loop {
-                TimeoutFuture::new(TICK_MS).await;
+                TimeoutFuture::new(MOVE_TICK_MS).await;
                 if !alive.load(Ordering::Relaxed) {
                     break;
                 }
-                if !page_hidden() {
+                if page_hidden() {
+                    continue;
+                }
+                now_s.set(now().timestamp());
+                ticks += 1;
+                if ticks * MOVE_TICK_MS >= TICK_MS {
+                    ticks = 0;
                     at.set(now());
                 }
             }
@@ -165,6 +178,36 @@ pub fn TripDetail(
             _ => 0.0,
         })
     };
+    // Časy zastávek (jízdní řád + zpoždění) pro odhad jízdních dob úseků.
+    let stop_times = {
+        let stops = stops.clone();
+        let trip_id = trip_id.clone();
+        Memo::new(move |_| {
+            delays.with(|d| {
+                stops.iter().map(|s| s.time.timestamp() + i64::from(d.at(&trip_id, &s.gtfs_id).unwrap_or(0))).collect::<Vec<_>>()
+            })
+        })
+    };
+    // Odhad místa vozu „teď“ (#15), jen u čerstvé polohy; zastaralá stojí, kde ji GPS viděla.
+    let estimated = Memo::new(move |_| {
+        let now_ts = now_s.get();
+        let gps = (place.get(), progress.get());
+        vehicle.with(|v| match (v, gps.0) {
+            (Some(f), Some(pl)) if fix_freshness(f.timestamp, now_ts) == FixFreshness::Fresh => {
+                let (pl, p) = stop_times.with(|t| estimate_place(pl, gps.1, t, f.timestamp, now_ts));
+                (Some(pl), p)
+            }
+            _ => gps,
+        })
+    });
+    let est_place = Memo::new(move |_| estimated.get().0);
+    let est_progress = Memo::new(move |_| estimated.get().1);
+    let est_flag = Memo::new(move |_| {
+        let now_ts = now_s.get();
+        vehicle.with(|v| {
+            v.as_ref().is_some_and(|f| fix_freshness(f.timestamp, now_ts) == FixFreshness::Fresh && is_estimate(f.timestamp, now_ts))
+        })
+    });
     let stale = Memo::new(move |_| {
         let now_ts = at.get().timestamp();
         vehicle.with(|v| v.as_ref().is_some_and(|f| fix_freshness(f.timestamp, now_ts) == FixFreshness::Stale))
@@ -188,7 +231,8 @@ pub fn TripDetail(
                 VehiclePlace::AtStop(i) => stops.get(i).map(|s| format!("na zastávce {}", s.name)),
                 VehiclePlace::Between(i) => stops.get(i).map(|s| format!("za zastávkou {}", s.name)),
             });
-            let small = fix.as_ref().map(|f| vehicle_text(kind, f, where_text.as_deref(), t.timestamp()));
+            let now_ts = now_s.get();
+            let small = fix.as_ref().map(|f| vehicle_text(kind, f, where_text.as_deref(), now_ts, est_flag.get()));
             Some(view! {
                 <div class="trip-sum" class:stale=move || stale.get()>
                     <div class="trip-sum-big">{summary_text(arrival, Some(minutes))}</div>
@@ -199,10 +243,10 @@ pub fn TripDetail(
     };
 
     // Značka vozu: piktogram v barvě linky a evidenční číslo.
-    let marker = move |top: String| {
-        let label = vehicle.with(|v| v.as_ref().and_then(|f| f.label.clone()));
+    let marker = move |top: Box<dyn Fn() -> String + Send + Sync>| {
+        let label = vehicle.with_untracked(|v| v.as_ref().and_then(|f| f.label.clone()));
         view! {
-            <span class="veh-mark" class:stale=move || stale.get() style=format!("top:{top}")>
+            <span class="veh-mark" class:stale=move || stale.get() class:est=move || est_flag.get() style=move || format!("top:{}", top())>
                 <VehicleIcon kind=kind color=color />
                 {label.map(|l| view! { <span class="veh-num">{l}</span> })}
             </span>
@@ -216,8 +260,7 @@ pub fn TripDetail(
         let dep_stop = row.dep.stop;
         move || {
             let t = at.get();
-            let place_now = place.get();
-            let p = progress.get();
+            let place_now = est_place.get();
             let veh = place_now.map(|p| match p {
                 VehiclePlace::AtStop(i) | VehiclePlace::Between(i) => i,
             });
@@ -253,7 +296,7 @@ pub fn TripDetail(
                             <div class="trip-stop" class:board=is_board class:passed=passed class:veh-here=at_stop>
                                 {fade_top.then(|| view! { <span class="rail-fade top"></span> })}
                                 {fade_bottom.then(|| view! { <span class="rail-fade bottom"></span> })}
-                                {at_stop.then(|| marker("50%".into()))}
+                                {at_stop.then(|| marker(Box::new(|| "50%".to_string())))}
                                 <span class="stop-name">
                                     {s.name.clone()}
                                     {is_board.then(|| view! { <span class="here">"tady stojíš"</span> })}
@@ -266,12 +309,12 @@ pub fn TripDetail(
                     if place_now == Some(VehiclePlace::Between(i)) {
                         // Mezera mezi zastávkami, ve které vůz jede; projetá část čáry podle podílu úseku.
                         // 15–85 %, aby štítek s číslem nezasahoval do názvů zastávek nad a pod mezerou.
-                        let pct = (15.0 + p.clamp(0.0, 1.0) * 70.0).round();
+                        let pct = move || (15.0 + est_progress.get().clamp(0.0, 1.0) * 70.0).round();
                         out.push(
                             view! {
                                 <div class="trip-gap">
-                                    <span class="rail-fade" style=format!("top:0;height:{pct}%")></span>
-                                    {marker(format!("{pct}%"))}
+                                    <span class="rail-fade" style=move || format!("top:0;height:{}%", pct())></span>
+                                    {marker(Box::new(move || format!("{}%", pct())))}
                                 </div>
                             }
                             .into_any(),
@@ -329,12 +372,20 @@ mod tests {
 
     #[test]
     fn vehicle_text_fresh_and_stale() {
-        assert_eq!(vehicle_text(RouteKind::Bus, &fix(1_000), None, 1_030), "autobus 8758 · před 30 s");
+        assert_eq!(vehicle_text(RouteKind::Bus, &fix(1_000), None, 1_030, false), "autobus 8758 · před 30 s");
         assert_eq!(
-            vehicle_text(RouteKind::Tram, &fix(1_000), Some("za zastávkou Pohořelec"), 1_090),
+            vehicle_text(RouteKind::Tram, &fix(1_000), Some("za zastávkou Pohořelec"), 1_090, false),
             "tramvaj 8758 · za zastávkou Pohořelec · před 1 min"
         );
-        assert_eq!(vehicle_text(RouteKind::Bus, &fix(1_000), None, 1_180), "autobus 8758 · poloha před 3 min");
+        assert_eq!(vehicle_text(RouteKind::Bus, &fix(1_000), None, 1_180, false), "autobus 8758 · poloha před 3 min");
+    }
+
+    #[test]
+    fn vehicle_text_estimate() {
+        assert_eq!(vehicle_text(RouteKind::Tram, &fix(1_000), None, 1_025, true), "tramvaj 8758 · odhad, GPS před 25 s");
+        assert_eq!(vehicle_text(RouteKind::Tram, &fix(1_000), None, 1_025, false), "tramvaj 8758 · před 25 s");
+        // U zastaralé polohy se odhad neukazuje (#12 má přednost).
+        assert_eq!(vehicle_text(RouteKind::Tram, &fix(1_000), None, 1_180, true), "tramvaj 8758 · poloha před 3 min");
     }
 
     #[test]

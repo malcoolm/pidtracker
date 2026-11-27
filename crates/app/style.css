@@ -712,7 +712,10 @@ html.vanoce :is(.history, .stats, .alerts) > h2 { padding-right: 56px; }
 .rail-fade.bottom { top: 50%; height: 50%; }
 .trip-gap { position: relative; height: 44px; }
 /* Značka vozu na čáře: piktogram v barvě linky a evidenční číslo. */
-.veh-mark { position: absolute; left: -31px; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; z-index: 2; }
+.veh-mark { position: absolute; left: -31px; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; z-index: 2; transition: top 1s linear; }
+.trip-gap .rail-fade { transition: height 1s linear; }
+/* Odhad polohy mezi staženími (#15): čárkovaný obrys. */
+.veh-mark.est .veh-icon { border-style: dashed; }
 .veh-icon {
   box-sizing: border-box;
   width: 30px;
