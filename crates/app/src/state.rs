@@ -85,6 +85,12 @@ pub struct AppState {
     pub planner_buffer_min: RwSignal<u8>,
     /// Druhy dopravy vyloučené z vyhledávání spojení.
     pub planner_excluded: RwSignal<Vec<RouteKind>>,
+    /// Sdílená poloha vozů (viz `positions`).
+    pub positions: RwSignal<Option<crate::positions::Positions>>,
+    /// Kolik obrazovek polohu vozů právě potřebuje.
+    pub positions_subs: RwSignal<u32>,
+    /// Feed poloh se právě stahuje.
+    pub positions_in_flight: RwSignal<bool>,
 }
 
 impl AppState {
@@ -109,6 +115,9 @@ impl AppState {
             alert_count: Memo::new(|_| 0usize),
             planner_buffer_min: RwSignal::new(ls_get::<u8>(keys::PLANNER_BUFFER_MIN).unwrap_or(2).min(5)),
             planner_excluded: RwSignal::new(ls_get(keys::PLANNER_EXCLUDED).unwrap_or_default()),
+            positions: RwSignal::new(None),
+            positions_subs: RwSignal::new(0),
+            positions_in_flight: RwSignal::new(false),
         };
         // Odvozené hodnoty potřebují hotový stav.
         s.watched = crate::alerts::make_watched(s);

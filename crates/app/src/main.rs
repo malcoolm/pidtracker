@@ -5,6 +5,7 @@ mod config;
 mod google;
 mod season;
 mod interop;
+mod positions;
 mod realtime;
 mod reauth;
 mod screens;

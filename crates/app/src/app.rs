@@ -27,6 +27,7 @@ pub fn App() -> impl IntoView {
     timetable_loader::install(state);
     update::install(state);
     crate::alerts::install(state);
+    crate::positions::install(state);
     crate::reauth::install(state);
 
     // Sezónní vzhled podle data; přepočet při návratu do popředí (např. 5. 11. ráno).

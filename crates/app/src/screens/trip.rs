@@ -1,20 +1,16 @@
 //! Detail spoje: všechny zastávky z jízdního řádu, časy se zpožděním a poloha vozu.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
-use leptos::task::spawn_local;
 use pid_core::alerts::ServiceAlert;
 use pid_core::realtime::{Delays, VehicleFix, VehiclePlace, place_vehicle};
 use pid_core::timetable::query::{BoardRow, TripRoute};
 
 use crate::components::{DepTime, RouteBadge};
 use crate::state::{AppState, Screen};
-use crate::util::{css_color, now, page_hidden};
+use crate::util::{css_color, now};
 
-const VEHICLE_REFRESH_MS: u32 = 60_000;
 /// Kolik zastávek před vozem (nebo nástupem) a za nástupem ukázat při sbalené trase.
 const CONTEXT_BEFORE: usize = 2;
 const CONTEXT_AFTER: usize = 5;
@@ -62,57 +58,22 @@ pub fn TripDetail(
     let n = route.stops.len();
     let stops = Arc::new(route.stops);
 
-    let vehicle = RwSignal::new(None::<VehicleFix>);
-    let loaded = RwSignal::new(false);
     let at = RwSignal::new(now());
     let head_open = RwSignal::new(false);
     let tail_open = RwSignal::new(false);
 
-    // Poloha vozu: hned a pak každých 60 s, jen když je stránka vidět; po zavření konec.
-    let alive = Arc::new(AtomicBool::new(true));
-    {
-        let alive = alive.clone();
-        on_cleanup(move || alive.store(false, Ordering::Relaxed));
-    }
+    // Poloha vozu ze sdíleného úložiště (#14): obnova po 20 s, dokud je detail otevřený.
+    crate::positions::subscribe(state);
     let trip_id = row.dep.trip_gtfs_id.clone();
-    let refresh = {
-        let alive = alive.clone();
+    let vehicle = {
         let trip_id = trip_id.clone();
-        move || {
-            let alive = alive.clone();
-            let trip_id = trip_id.clone();
-            spawn_local(async move {
-                let fix = crate::realtime::fetch_vehicle(&trip_id).await;
-                if alive.load(Ordering::Relaxed) {
-                    vehicle.set(fix);
-                    loaded.set(true);
-                    at.set(now());
-                }
-            });
-        }
+        Memo::new(move |_| state.positions.with(|p| p.as_ref().and_then(|p| p.fixes.get(&trip_id).cloned())))
     };
-    {
-        let alive = alive.clone();
-        let refresh = refresh.clone();
-        spawn_local(async move {
-            loop {
-                if !page_hidden() {
-                    refresh();
-                }
-                TimeoutFuture::new(VEHICLE_REFRESH_MS).await;
-                if !alive.load(Ordering::Relaxed) {
-                    break;
-                }
-            }
-        });
-    }
-    // Návrat z pozadí: hned čerstvá poloha.
-    Effect::new(move |prev: Option<u32>| {
-        let f = state.foreground.get();
-        if prev.is_some_and(|p| p != f) {
-            refresh();
-        }
-        f
+    let loaded = Memo::new(move |_| state.positions.with(Option::is_some));
+    // Nová data → přepočítat stáří polohy a časy.
+    Effect::new(move |_| {
+        state.positions.track();
+        at.set(now());
     });
 
     let place = Memo::new(move |_| vehicle.with(|v| v.as_ref().and_then(|f| place_vehicle(&coords, f))));

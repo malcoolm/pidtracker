@@ -295,3 +295,15 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 - [ ] U jízdy, jejíž spoj ještě nevyjel, a u metra nebo vlaku se číslo vozu nezobrazí
       a detail vypadá jako dřív.
 - [ ] V režimu letadlo: detail spojení se otevře a funguje, jen bez čísla vozu.
+
+## Kontrolní bod O – čerstvá poloha vozu (#14)
+
+- [ ] Odjezdy → `›` u jedoucího spoje: poloha vozu je vidět hned po otevření a „před N s“
+      se obnovuje zhruba každých 20 s (ne jednou za minutu).
+- [ ] Detail spojení s jedoucí tramvají nebo autobusem: číslo vozu je vidět hned. Zavřít
+      a do 20 s znovu otevřít: číslo je tam okamžitě, bez čekání.
+- [ ] Přepnout do jiné aplikace, po minutě se vrátit do otevřeného detailu: poloha se hned
+      obnoví.
+- [ ] Režim letadlo s otevřeným detailem: zůstane poslední poloha, aplikace nespadne.
+- [ ] Nastavení → Mobilní data → Safari/PID Tracker: po pár minutách na úvodní obrazovce
+      (bez otevřeného detailu) spotřeba dat neroste.
