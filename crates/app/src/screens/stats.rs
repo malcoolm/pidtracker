@@ -1,7 +1,9 @@
 //! Statistiky: období (týden/měsíc/rok/celkem), osoby, počty, čas, typy dopravy, linky.
 
 use leptos::prelude::*;
-use pid_core::stats::{Period, PeriodKind, PersonStats, StatsQuery, compute, compute_combined};
+use std::collections::HashMap;
+
+use pid_core::stats::{Period, PeriodKind, PersonStats, StatsQuery, compute, compute_combined, km_label};
 
 use crate::state::AppState;
 use crate::util::{css_color, duration_label, kind_color, now};
@@ -30,6 +32,18 @@ pub fn Stats() -> impl IntoView {
         p.dedup();
         p
     };
+    // Vzdálenosti jízd (#20) jednou pro všechny jízdy; přepnutí období je pak nepřepočítává.
+    let distances = Memo::new(move |_| {
+        let Some(ix) = state.tt.get().index() else { return HashMap::new() };
+        state.rides.with(|rs| {
+            rs.iter()
+                .filter_map(|r| {
+                    let alight = r.alight_stop_id.as_deref()?;
+                    Some((r.id.clone(), ix.ride_distance_m(&r.route_id, &r.board_stop_id, alight)?))
+                })
+                .collect::<HashMap<String, f64>>()
+        })
+    });
     let result = Memo::new(move |_| {
         let persons = match who.get() {
             Who::Me => vec![me()],
@@ -42,11 +56,14 @@ pub fn Stats() -> impl IntoView {
         };
         let q = StatsQuery { period: period.get(), persons };
         // „Oba“ = jeden souhrnný blok, ostatní volby jedna osoba; příznak jde i do klíče <For>.
-        if who.get() == Who::Both {
-            vec![(true, state.rides.with(|rs| compute_combined(rs, &q)))]
-        } else {
-            state.rides.with(|rs| compute(rs, &q)).into_iter().map(|p| (false, p)).collect::<Vec<_>>()
-        }
+        distances.with(|dist| {
+            let km = |r: &pid_core::ride::Ride| dist.get(&r.id).copied();
+            if who.get() == Who::Both {
+                vec![(true, state.rides.with(|rs| compute_combined(rs, &q, &km)))]
+            } else {
+                state.rides.with(|rs| compute(rs, &q, &km)).into_iter().map(|p| (false, p)).collect::<Vec<_>>()
+            }
+        })
     });
     let set_kind = move |k: PeriodKind| period.set(Period::containing(k, now().date_naive()));
 
@@ -84,7 +101,7 @@ pub fn Stats() -> impl IntoView {
                 <button class:selected=move || who.get() == Who::Both on:click=move |_| who.set(Who::Both)>"Oba"</button>
             </div>
             <div class="stats-grid">
-                <For each=move || result.get() key=|(both, p)| (*both, p.person.clone(), p.rides, p.minutes, p.series.len()) let:item>
+                <For each=move || result.get() key=|(both, p)| (*both, p.person.clone(), p.rides, p.minutes, p.distance_m.round() as u64, p.series.len()) let:item>
                     {let (both, ps) = item;
                     if both {
                         view! { <PersonCard stats=ps title="Oba".to_string() /> }.into_any()
@@ -109,6 +126,7 @@ fn PersonCard(stats: PersonStats, #[prop(optional)] title: Option<String>) -> im
             <div class="kpis">
                 <div><strong>{stats.rides}</strong><span>"jízd"</span></div>
                 <div><strong>{duration_label(stats.minutes)}</strong><span>"v MHD"</span></div>
+                <div><strong>{km_label(stats.distance_m)}</strong><span>"ujeto"</span></div>
             </div>
             <Show when=move || stats.rides == 0>
                 <p class="muted">"V tomto období žádné jízdy."</p>

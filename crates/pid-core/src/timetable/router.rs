@@ -956,6 +956,31 @@ mod tests {
     }
 
     #[test]
+    fn ride_distance_along_route() {
+        let ix = net();
+        let id = |s: u32| ix.tt.stops[s as usize].gtfs_id.clone();
+        let along = ix.stop_distance_m(S1, H1) + ix.stop_distance_m(H1, T1);
+        let d = ix.ride_distance_m("L9", &id(S1), &id(T1)).unwrap();
+        assert!((d - along).abs() < 0.01, "{d} vs {along}");
+        // Úsek uprostřed trasy.
+        let d = ix.ride_distance_m("L9", &id(H1), &id(T1)).unwrap();
+        assert!((d - ix.stop_distance_m(H1, T1)).abs() < 0.01);
+    }
+
+    #[test]
+    fn ride_distance_falls_back_to_straight_line() {
+        let ix = net();
+        let id = |s: u32| ix.tt.stops[s as usize].gtfs_id.clone();
+        let straight = ix.stop_distance_m(S1, T1);
+        // Linka v jízdním řádu není.
+        assert!((ix.ride_distance_m("L999", &id(S1), &id(T1)).unwrap() - straight).abs() < 0.01);
+        // Linka nejede z T1 do S1 (opačné pořadí zastávek).
+        assert!((ix.ride_distance_m("L9", &id(T1), &id(S1)).unwrap() - straight).abs() < 0.01);
+        // Neznámá zastávka.
+        assert_eq!(ix.ride_distance_m("L9", "U-neni", &id(T1)), None);
+    }
+
+    #[test]
     fn leg_stops_returns_ride_segment() {
         let ix = net();
         let js = ix.plan_once(&query(t(7, 55)));

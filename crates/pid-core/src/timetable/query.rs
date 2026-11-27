@@ -170,6 +170,25 @@ impl TimetableIndex {
         haversine_m(lat, lon, slat, slon)
     }
 
+    /// Ujetá vzdálenost jízdy v metrech (#20): po trase linky `route_gtfs_id`, která vede
+    /// přes obě stanoviště v tomto pořadí, jako součet úseků mezi sousedními zastávkami
+    /// (u víc tras ta nejkratší). Když taková trasa v jízdním řádu není, vzdušná vzdálenost
+    /// obou stanovišť. `None`, když některé stanoviště v jízdním řádu chybí.
+    pub fn ride_distance_m(&self, route_gtfs_id: &str, board_stop_gtfs: &str, alight_stop_gtfs: &str) -> Option<f64> {
+        let board = self.stop_by_gtfs_id(board_stop_gtfs)?;
+        let alight = self.stop_by_gtfs_id(alight_stop_gtfs)?;
+        let along = self.stop_patterns[board as usize]
+            .iter()
+            .filter(|&&(p, _)| self.tt.routes[self.tt.patterns[p as usize].route as usize].gtfs_id == route_gtfs_id)
+            .filter_map(|&(p, from)| {
+                let stops = &self.tt.patterns[p as usize].stops;
+                let to = (from as usize + 1..stops.len()).find(|&i| stops[i] == alight)?;
+                Some(stops[from as usize..=to].windows(2).map(|w| self.stop_distance_m(w[0], w[1])).sum::<f64>())
+            })
+            .min_by(f64::total_cmp);
+        Some(along.unwrap_or_else(|| self.stop_distance_m(board, alight)))
+    }
+
     /// Vzdušná vzdálenost dvou stanovišť v metrech.
     pub(crate) fn stop_distance_m(&self, a: u32, b: u32) -> f64 {
         let (lat, lon) = self.stop_coords(b);

@@ -324,3 +324,11 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 - [ ] Menu: počet mimořádností v oranžovém kolečku je v běžném písmu a dobře čitelný,
       názvy položek menu zůstávají vánoční.
 - [ ] Platí ve světlém i tmavém režimu.
+
+## Kontrolní bod R – ujeté kilometry ve statistikách (#20)
+
+- [ ] Statistiky → Týden, Měsíc, Rok i Celkem: v každé kartě je vedle počtu jízd a času
+      i „N km ujeto“ (pod 10 km s desetinnou čárkou, např. „4,9 km“).
+- [ ] Šipkami na předchozí/další období se kilometry přepočítají; období bez jízd má „0 km“.
+- [ ] „Já“, druhá osoba i „Oba“ mají kilometry; u „Oba“ jsou součtem obou.
+- [ ] Hodnota je rozumná pro známou trasu (např. tramvaj 22 Malovanka → Národní třída asi 5 km).

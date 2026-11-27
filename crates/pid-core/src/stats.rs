@@ -120,6 +120,8 @@ pub struct PersonStats {
     pub person: String,
     pub rides: u32,
     pub minutes: i64,
+    /// Ujetá vzdálenost v metrech (jen jízdy se známou výstupní zastávkou a vzdáleností).
+    pub distance_m: f64,
     /// Sestupně podle počtu.
     pub by_kind: Vec<(RouteKind, u32)>,
     /// Max. 5, sestupně podle počtu, při shodě abecedně.
@@ -194,12 +196,34 @@ fn filtered_by_person<'a>(rides: &'a [Ride], q: &StatsQuery) -> BTreeMap<String,
 }
 
 /// Statistiky z již vyfiltrovaných jízd; `all` slouží k dohledání SPZ vozu.
-fn person_stats(person: String, rides: Vec<&Ride>, all: &[Ride], period: Period) -> PersonStats {
+/// Vzdálenost jízdy v metrech, pokud ji jde určit (počítá se z jízdního řádu mimo `pid-core::stats`).
+pub type DistanceFn<'a> = &'a dyn Fn(&Ride) -> Option<f64>;
+
+/// „0 km“, „3,4 km“, „84 km“, „1 235 km“.
+pub fn km_label(meters: f64) -> String {
+    let km = meters / 1000.0;
+    if km > 0.0 && km < 9.95 {
+        return format!("{km:.1} km").replace('.', ",");
+    }
+    let n = km.round() as u64;
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(' ');
+        }
+        out.push(c);
+    }
+    format!("{out} km")
+}
+
+fn person_stats(person: String, rides: Vec<&Ride>, all: &[Ride], period: Period, distance: DistanceFn) -> PersonStats {
     let minutes = rides
         .iter()
         .filter_map(|r| r.duration_minutes())
         .filter(|&m| m > 0 && m <= MAX_COUNTED_MINUTES)
         .sum();
+    let distance_m = rides.iter().filter(|r| r.alight_stop_id.is_some()).filter_map(|r| distance(r)).sum();
     let mut kinds = HashMap::new();
     let mut routes = HashMap::new();
     let mut operators = HashMap::new();
@@ -228,6 +252,7 @@ fn person_stats(person: String, rides: Vec<&Ride>, all: &[Ride], period: Period)
         person,
         rides: rides.len() as u32,
         minutes,
+        distance_m,
         by_kind: sorted_counts(kinds),
         by_operator: sorted_counts(operators),
         by_vehicle,
@@ -236,17 +261,17 @@ fn person_stats(person: String, rides: Vec<&Ride>, all: &[Ride], period: Period)
     }
 }
 
-pub fn compute(rides: &[Ride], q: &StatsQuery) -> Vec<PersonStats> {
+pub fn compute(rides: &[Ride], q: &StatsQuery, distance: DistanceFn) -> Vec<PersonStats> {
     filtered_by_person(rides, q)
         .into_iter()
-        .map(|(person, rs)| person_stats(person, rs, rides, q.period))
+        .map(|(person, rs)| person_stats(person, rs, rides, q.period, distance))
         .collect()
 }
 
 /// Sloučené statistiky všech osob z `q.persons` (prázdné = všichni); `person` je prázdný řetězec.
-pub fn compute_combined(rides: &[Ride], q: &StatsQuery) -> PersonStats {
+pub fn compute_combined(rides: &[Ride], q: &StatsQuery, distance: DistanceFn) -> PersonStats {
     let all: Vec<&Ride> = filtered_by_person(rides, q).into_values().flatten().collect();
-    person_stats(String::new(), all, rides, q.period)
+    person_stats(String::new(), all, rides, q.period, distance)
 }
 
 #[cfg(test)]
@@ -291,6 +316,10 @@ mod tests {
         ]
     }
 
+    fn no_km(_: &Ride) -> Option<f64> {
+        None
+    }
+
     fn month(m: u32) -> StatsQuery {
         StatsQuery { period: Period::Month { year: 2026, month: m }, persons: vec![] }
     }
@@ -301,7 +330,7 @@ mod tests {
 
     #[test]
     fn month_per_person() {
-        let s = compute(&rides(), &month(10));
+        let s = compute(&rides(), &month(10), &no_km);
         assert_eq!(s.len(), 2);
         assert_eq!(person(&s, TATA).rides, 3);
         assert_eq!(person(&s, SYN).rides, 1);
@@ -310,20 +339,20 @@ mod tests {
 
     #[test]
     fn forgotten_exit_excluded_from_time() {
-        assert_eq!(person(&compute(&rides(), &month(10)), TATA).minutes, 30);
+        assert_eq!(person(&compute(&rides(), &month(10), &no_km), TATA).minutes, 30);
     }
 
     #[test]
     fn person_filter() {
         let q = StatsQuery { period: Period::Month { year: 2026, month: 10 }, persons: vec![SYN.into()] };
-        let s = compute(&rides(), &q);
+        let s = compute(&rides(), &q, &no_km);
         assert_eq!(s.len(), 1);
         assert_eq!((s[0].rides, s[0].minutes), (1, 15));
     }
 
     #[test]
     fn by_kind_and_top_routes() {
-        let s = compute(&rides(), &month(10));
+        let s = compute(&rides(), &month(10), &no_km);
         let t = person(&s, TATA);
         let mut kinds = t.by_kind.clone();
         kinds.sort();
@@ -333,14 +362,14 @@ mod tests {
 
     #[test]
     fn all_period_counts_everything() {
-        let s = compute(&rides(), &StatsQuery { period: Period::All, persons: vec![] });
+        let s = compute(&rides(), &StatsQuery { period: Period::All, persons: vec![] }, &no_km);
         assert_eq!(person(&s, TATA).rides, 4);
         assert_eq!(person(&s, TATA).series, vec![("2026".into(), 4)]);
     }
 
     #[test]
     fn series_month_has_all_days() {
-        let s = compute(&rides(), &month(10));
+        let s = compute(&rides(), &month(10), &no_km);
         let t = person(&s, TATA);
         assert_eq!(t.series.len(), 31);
         assert_eq!(t.series.iter().map(|x| x.1).sum::<u32>(), 3);
@@ -349,10 +378,10 @@ mod tests {
 
     #[test]
     fn series_week_and_year() {
-        let w = compute(&rides(), &StatsQuery { period: Period::Week { iso_year: 2026, week: 41 }, persons: vec![] });
+        let w = compute(&rides(), &StatsQuery { period: Period::Week { iso_year: 2026, week: 41 }, persons: vec![] }, &no_km);
         assert_eq!(person(&w, TATA).series.len(), 7);
         assert_eq!(person(&w, TATA).series[0], ("Po".into(), 2));
-        let y = compute(&rides(), &StatsQuery { period: Period::Year(2026), persons: vec![] });
+        let y = compute(&rides(), &StatsQuery { period: Period::Year(2026), persons: vec![] }, &no_km);
         assert_eq!(person(&y, TATA).series.len(), 12);
         assert_eq!(person(&y, TATA).series[10], ("11".into(), 1));
     }
@@ -360,15 +389,15 @@ mod tests {
     #[test]
     fn combined_sums_both_persons() {
         let q = StatsQuery { period: Period::All, persons: vec![] };
-        let per = compute(&rides(), &q);
-        let c = compute_combined(&rides(), &q);
+        let per = compute(&rides(), &q, &no_km);
+        let c = compute_combined(&rides(), &q, &no_km);
         assert_eq!(c.person, "");
         assert_eq!(c.rides, per.iter().map(|p| p.rides).sum::<u32>());
         assert_eq!(c.minutes, per.iter().map(|p| p.minutes).sum::<i64>());
         assert_eq!(c.series.len(), person(&per, TATA).series.len());
         assert_eq!(c.series.iter().map(|x| x.1).sum::<u32>(), c.rides);
         // V říjnu jela linku 22 jednou táta a jednou syn.
-        let m = compute_combined(&rides(), &month(10));
+        let m = compute_combined(&rides(), &month(10), &no_km);
         assert_eq!(m.rides, 4);
         assert_eq!(m.top_routes.iter().find(|r| r.0 == "22").map(|r| r.1), Some(2));
         assert_eq!(m.series.len(), 31);
@@ -390,6 +419,37 @@ mod tests {
         assert_eq!(Period::Week { iso_year: 2026, week: 43 }.label_cs(), "týden 43/2026 (19. 10. – 25. 10.)");
         assert_eq!(Period::Year(2026).label_cs(), "2026");
         assert_eq!(Period::All.label_cs(), "Celkem");
+    }
+
+    #[test]
+    fn distance_sums_per_person_and_period() {
+        let mut no_alight = mk("t5", TATA, "2026-10-06T08:00:00+02:00", 10, "22", 0);
+        no_alight.alight_stop_id = None;
+        let mut all = rides();
+        all.push(no_alight);
+        // Každá jízda 2,5 km; bez výstupní zastávky se vzdálenost nepočítá.
+        let km = |r: &Ride| {
+            assert!(r.alight_stop_id.is_some(), "jízda bez výstupu se nemá počítat");
+            Some(2_500.0)
+        };
+        let oct = compute(&all, &month(10), &km);
+        assert_eq!(person(&oct, TATA).distance_m, 7_500.0);
+        assert_eq!(person(&oct, SYN).distance_m, 2_500.0);
+        assert_eq!(compute_combined(&all, &month(10), &km).distance_m, 10_000.0);
+        let total = compute(&all, &StatsQuery { period: Period::All, persons: vec![] }, &km);
+        assert_eq!(person(&total, TATA).distance_m, 10_000.0);
+        // Neznámá vzdálenost jízdy součet nekazí.
+        let some = |r: &Ride| (r.id != "t1").then_some(1_000.0);
+        assert_eq!(person(&compute(&all, &month(10), &some), TATA).distance_m, 2_000.0);
+    }
+
+    #[test]
+    fn km_label_rounding() {
+        assert_eq!(km_label(0.0), "0 km");
+        assert_eq!(km_label(3_449.0), "3,4 km");
+        assert_eq!(km_label(9_960.0), "10 km");
+        assert_eq!(km_label(84_400.0), "84 km");
+        assert_eq!(km_label(1_234_567.0), "1 235 km");
     }
 }
 
@@ -422,7 +482,7 @@ mod operator_vehicle_tests {
             mk("4", "ARRIVA CITY a.s.", "", "2026-10-08T08:00:00+02:00"),
             mk("5", "", "1234", "2026-10-09T08:00:00+02:00"),
         ];
-        let s = compute(&rides, &StatsQuery { period: Period::Month { year: 2026, month: 10 }, persons: vec![] });
+        let s = compute(&rides, &StatsQuery { period: Period::Month { year: 2026, month: 10 }, persons: vec![] }, &|_| None);
         let p = &s[0];
         assert_eq!(p.by_operator, vec![("DPP".into(), 3), ("ARRIVA CITY a.s.".into(), 1)]);
         let v = |vehicle: &str, rides: u32, plate: Option<&str>| VehicleCount {
@@ -438,7 +498,7 @@ mod operator_vehicle_tests {
         let rides: Vec<Ride> = (0..15)
             .map(|i| mk(&i.to_string(), "DPP", &format!("{}", 1000 + i), "2026-10-05T08:00:00+02:00"))
             .collect();
-        let s = compute(&rides, &StatsQuery { period: Period::All, persons: vec![] });
+        let s = compute(&rides, &StatsQuery { period: Period::All, persons: vec![] }, &|_| None);
         assert_eq!(s[0].by_vehicle.len(), TOP_VEHICLES);
     }
 }
@@ -467,7 +527,7 @@ mod plate_lookup_tests {
             mk("2", "syn@gmail.com", "1AB 2345", "2026-09-01T08:00:00+02:00"),
         ];
         let q = StatsQuery { period: Period::Month { year: 2026, month: 10 }, persons: vec!["tata@gmail.com".into()] };
-        let s = compute(&rides, &q);
+        let s = compute(&rides, &q, &|_| None);
         assert_eq!(s[0].by_vehicle[0].plate.as_deref(), Some("1AB 2345"));
     }
 }
