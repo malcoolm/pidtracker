@@ -316,3 +316,11 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
       s textem „poloha před N min“ (čitelný ve světlém i tmavém režimu i o Vánocích).
 - [ ] Po víc než 10 minutách v režimu letadlo vůz z trasy zmizí, zobrazí se „Poloha vozu
       není k dispozici.“ a jízdní řád funguje dál.
+
+## Kontrolní bod Q – čitelná data a počet mimořádností o Vánocích (#19)
+
+- [ ] Ve vánočním období (nebo s `?vanoce=1`): Historie → nadpisy dnů (např. „pátek 27. 11.“)
+      jsou v běžném písmu, ostatní nadpisy zůstávají vánoční.
+- [ ] Menu: počet mimořádností v oranžovém kolečku je v běžném písmu a dobře čitelný,
+      názvy položek menu zůstávají vánoční.
+- [ ] Platí ve světlém i tmavém režimu.

@@ -532,6 +532,10 @@ html.vanoce :is(h1, h2, h3, .topbar-title, .menu-item, .menu-link, .primary, .se
 html.vanoce :is(h1, h2, h3) { color: var(--season-head); }
 html.vanoce h2 { font-size: 26px; }
 html.vanoce h3 { font-size: 19px; text-transform: none; letter-spacing: 0; }
+/* Data dnů v historii a počet mimořádností v menu zůstávají v Fira Sans: číslice jsou ve
+   vánočním písmu hůř čitelné (#19). */
+html.vanoce h3.day { font-family: "Fira Sans", sans-serif; font-size: 15px; }
+html.vanoce .menu-count { font-family: "Fira Sans", sans-serif; font-size: 13px; }
 html.vanoce h2::after { content: " 🎄"; font-family: "Fira Sans", sans-serif; font-size: 20px; }
 html.vanoce .topbar-title { font-size: 21px; }
 html.vanoce :is(.menu-item, .primary, .secondary) { font-size: 19px; }
