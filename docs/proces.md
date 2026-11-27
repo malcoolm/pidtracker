@@ -67,6 +67,9 @@ Pak se na nástěnce přesune do **Připraveno**.
   z něj něco vypadne).
 - **Výjimka – kritická chyba**: aplikace nejde spustit, neukládá nebo nesynchronizuje jízdy.
   Ta jde do sprintu hned, bez čekání na plánování.
+- **Výjimka – malá oprava**: chybu nahlášenou během sprintu, která má velikost S, lze po
+  dohodě se správcem produktu vzít do běžícího sprintu hned. Story musí mít kritéria přijetí
+  a na nástěnce se zapíše do aktuálního sprintu, aby byla v poznámkách k vydání.
 - Rozpracovaná story má stav **Rozpracováno**; najednou nejvýš jedna až dvě.
 - Commity odkazují na issue: `feat(app): stanoviště u nástupu (#1)`. Poslední commit story
   ji uzavírá: `… (closes #1)`.
