@@ -176,3 +176,53 @@ pub fn DepTime(scheduled: DateTime<Tz>, delay_s: Option<i32>, at: DateTime<Tz>) 
         </span>
     }
 }
+
+/// Značka vozu (#13): bílý piktogram druhu dopravy na kolečku v barvě linky.
+#[component]
+pub fn VehicleIcon(kind: pid_core::ride::RouteKind, color: u32) -> impl IntoView {
+    use pid_core::ride::RouteKind;
+    let bg = css_color(color);
+    // Výřezy oken v barvě linky, aby piktogram vypadal jako obrys vozu.
+    let shape = match kind {
+        RouteKind::Tram => view! {
+            <path d="M8 1h8v1.5h-3.2l1.6 2.5H13l-1-1.6L11 5H9.6l1.6-2.5H8z" />
+            <rect x="4" y="6" width="16" height="12" rx="2.5" />
+            <rect x="6.5" y="8.5" width="11" height="4.5" rx="1" fill=bg.clone() />
+            <rect x="3" y="19" width="18" height="2" rx="1" />
+        }
+        .into_any(),
+        RouteKind::Trolleybus => view! {
+            <path d="M9 1.5l3 4.5h-1.4L8 2.3zM15 1.5l3 4.5h-1.4L14 2.3z" />
+            <rect x="3" y="6" width="18" height="11" rx="3" />
+            <rect x="5.5" y="8.5" width="13" height="4" rx="1" fill=bg.clone() />
+            <circle cx="7.5" cy="19" r="2" />
+            <circle cx="16.5" cy="19" r="2" />
+        }
+        .into_any(),
+        RouteKind::Metro => view! {
+            <circle cx="12" cy="12" r="10" />
+            <path d="M6.5 17V7h2.2L12 12l3.3-5h2.2v10h-2.3v-6.3L12 15.4l-3.2-4.7V17z" fill=bg.clone() />
+        }
+        .into_any(),
+        RouteKind::Train => view! {
+            <rect x="5" y="2" width="14" height="16" rx="4" />
+            <rect x="7.5" y="5" width="9" height="5" rx="1" fill=bg.clone() />
+            <circle cx="9" cy="14" r="1.3" fill=bg.clone() />
+            <circle cx="15" cy="14" r="1.3" fill=bg.clone() />
+            <path d="M7 22l2.5-3.5h1.8L9 22zM17 22l-2.5-3.5h-1.8L15 22z" />
+        }
+        .into_any(),
+        _ => view! {
+            <rect x="3" y="4" width="18" height="13" rx="3" />
+            <rect x="5.5" y="6.5" width="13" height="5" rx="1" fill=bg.clone() />
+            <circle cx="7.5" cy="19" r="2" />
+            <circle cx="16.5" cy="19" r="2" />
+        }
+        .into_any(),
+    };
+    view! {
+        <span class="veh-icon" style=format!("background:{bg}") aria-label=kind.label_cs()>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">{shape}</svg>
+        </span>
+    }
+}

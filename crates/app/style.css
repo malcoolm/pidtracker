@@ -699,17 +699,36 @@ html.vanoce :is(.history, .stats, .alerts) > h2 { padding-right: 56px; }
 .trip-stop .here { display: block; font-weight: 400; font-size: 13px; color: var(--accent-text); }
 .trip-stop.passed { opacity: .5; }
 .trip-more { display: block; width: 100%; text-align: left; color: var(--muted); padding: 10px 0; min-height: 44px; }
-.trip-vehicle {
-  display: inline-block;
-  margin: 4px 0;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: var(--warn-bg);
-  color: var(--warn-text);
-  font-weight: 500;
+.trip-stop::before { z-index: 1; }
+/* Souhrn nad trasou (#13): za kolik přijede a kde je vůz. */
+.trip-sum { background: var(--surface); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; }
+.trip-sum-big { font-size: 22px; font-weight: 700; line-height: 1.2; }
+.trip-sum-small { color: var(--muted); font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+.trip-sum.stale .trip-sum-big { color: var(--muted); }
+/* Projetá část čáry trasy je bledá (překryv barvou pozadí). */
+.rail-fade { position: absolute; left: -18px; width: 4px; background: var(--bg); opacity: .6; z-index: 0; }
+.rail-fade.top { top: 0; height: 50%; }
+.rail-fade.bottom { top: 50%; height: 50%; }
+.trip-gap { position: relative; height: 44px; }
+/* Značka vozu na čáře: piktogram v barvě linky a evidenční číslo. */
+.veh-mark { position: absolute; left: -31px; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; z-index: 2; }
+.veh-icon {
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-/* Poloha starší než 2 min (#12): zašedlá. */
-.trip-vehicle.stale { background: var(--border); color: var(--muted); font-weight: 400; }
+.veh-num { background: var(--warn); color: #252525; font-size: 12px; font-weight: 700; border-radius: 6px; padding: 1px 6px; }
+.veh-mark.stale .veh-icon { filter: grayscale(1); opacity: .6; }
+.veh-mark.stale .veh-num { background: var(--border); color: var(--muted); }
+/* Vůz stojí na zastávce: značka místo tečky, název odsunutý za číslo vozu. */
+.trip-stop.veh-here { padding-left: 54px; }
+.trip-stop.veh-here .veh-mark { left: -31px; }
 
 /* Mimořádnosti; html.has-banner posune překryvy (menu, detail spoje) pod pruh */
 html.has-banner { --banner-h: 44px; }

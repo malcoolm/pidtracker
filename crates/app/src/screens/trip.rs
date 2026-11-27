@@ -7,10 +7,14 @@ use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::alerts::ServiceAlert;
-use pid_core::realtime::{Delays, FixFreshness, VehicleFix, VehiclePlace, fix_freshness, place_vehicle};
-use pid_core::timetable::query::{BoardRow, TripRoute};
+use pid_core::realtime::{
+    ArrivalState, Delays, FixFreshness, VehicleFix, VehiclePlace, arrival_state, fix_freshness, place_vehicle,
+    segment_progress,
+};
+use pid_core::ride::RouteKind;
+use pid_core::timetable::query::{BoardRow, TripRoute, stops_text};
 
-use crate::components::{DepTime, RouteBadge};
+use crate::components::{DepTime, RouteBadge, VehicleIcon};
 use crate::state::{AppState, Screen};
 use crate::util::{css_color, now, page_hidden};
 
@@ -26,11 +30,29 @@ fn age_label(timestamp: Option<i64>, now_ts: i64) -> Option<String> {
     Some(if age < 60 { format!("před {age} s") } else { format!("před {} min", age / 60) })
 }
 
-fn vehicle_text(fix: &VehicleFix, now_ts: i64) -> String {
-    let mut s = match &fix.label {
-        Some(l) => format!("🚋 vůz {l}"),
-        None => "🚋 vůz".to_string(),
-    };
+/// Druh vozu malým písmem do souhrnu („autobus 1956 …“).
+fn kind_word(kind: RouteKind) -> &'static str {
+    match kind {
+        RouteKind::Bus => "autobus",
+        RouteKind::Tram => "tramvaj",
+        RouteKind::Trolleybus => "trolejbus",
+        RouteKind::Metro => "metro",
+        RouteKind::Train => "vlak",
+        _ => "vůz",
+    }
+}
+
+/// Druhý řádek souhrnu: „autobus 1956 · za zastávkou Pod Královkou · před 20 s“.
+fn vehicle_text(kind: RouteKind, fix: &VehicleFix, place: Option<&str>, now_ts: i64) -> String {
+    let mut s = kind_word(kind).to_string();
+    if let Some(l) = &fix.label {
+        s.push(' ');
+        s.push_str(l);
+    }
+    if let Some(p) = place {
+        s.push_str(" · ");
+        s.push_str(p);
+    }
     if let Some(age) = age_label(fix.timestamp, now_ts) {
         s.push_str(" · ");
         if fix_freshness(fix.timestamp, now_ts) == FixFreshness::Stale {
@@ -39,6 +61,22 @@ fn vehicle_text(fix: &VehicleFix, now_ts: i64) -> String {
         s.push_str(&age);
     }
     s
+}
+
+/// Velký řádek souhrnu (#13): „za 3 min · 2 zastávky“, „přijíždí“, „ve stanici“, „vůz už odjel“.
+/// `minutes` = za kolik minut je vůz na mé zastávce podle jízdního řádu a zpoždění.
+fn summary_text(state: Option<ArrivalState>, minutes: Option<i64>) -> String {
+    let when = minutes.map(|m| if m <= 0 { "teď".to_string() } else { format!("za {m} min") });
+    match state {
+        Some(ArrivalState::Arriving) => "přijíždí".into(),
+        Some(ArrivalState::AtStop) => "ve stanici".into(),
+        Some(ArrivalState::Departed) => "vůz už odjel".into(),
+        Some(ArrivalState::StopsAway(n)) => match when {
+            Some(w) => format!("{w} · {}", stops_text(n)),
+            None => stops_text(n),
+        },
+        None => when.unwrap_or_default(),
+    }
 }
 
 /// „dalších 18 zastávek“ se správným skloňováním.
@@ -61,10 +99,12 @@ pub fn TripDetail(
     let state = expect_context::<AppState>();
     let route: TripRoute =
         state.tt.get_untracked().index().map(|ix| ix.trip_route(&row.dep)).unwrap_or(TripRoute { stops: Vec::new(), board: None });
-    let coords: Vec<(f64, f64)> = route.stops.iter().map(|s| (s.lat, s.lon)).collect();
+    let coords: Arc<Vec<(f64, f64)>> = Arc::new(route.stops.iter().map(|s| (s.lat, s.lon)).collect());
     let board = route.board;
     let n = route.stops.len();
     let stops = Arc::new(route.stops);
+    let kind = RouteKind::from_gtfs(row.dep.route_type);
+    let color = row.dep.color;
 
     let at = RwSignal::new(now());
     let head_open = RwSignal::new(false);
@@ -109,7 +149,62 @@ pub fn TripDetail(
         });
     }
 
-    let place = Memo::new(move |_| vehicle.with(|v| v.as_ref().and_then(|f| place_vehicle(&coords, f))));
+    let place = {
+        let coords = coords.clone();
+        Memo::new(move |_| vehicle.with(|v| v.as_ref().and_then(|f| place_vehicle(&coords, f))))
+    };
+    // Podíl úseku, na kterém vůz je (jen mezi zastávkami).
+    let progress = {
+        let coords = coords.clone();
+        Memo::new(move |_| match (place.get(), vehicle.get()) {
+            (Some(VehiclePlace::Between(i)), Some(f)) => segment_progress(&coords, &f, i),
+            _ => 0.0,
+        })
+    };
+    let stale = Memo::new(move |_| {
+        let now_ts = at.get().timestamp();
+        vehicle.with(|v| v.as_ref().is_some_and(|f| fix_freshness(f.timestamp, now_ts) == FixFreshness::Stale))
+    });
+
+    // Souhrn nahoře (#13): jen když víme, kde stojíš.
+    let summary = {
+        let stops = stops.clone();
+        let coords = coords.clone();
+        let trip_id = trip_id.clone();
+        move || {
+            let b = board?;
+            let s = stops.get(b)?;
+            let t = at.get();
+            let delay = delays.with(|d| d.at(&trip_id, &s.gtfs_id)).unwrap_or(0);
+            let minutes = (s.time + chrono::Duration::seconds(i64::from(delay)) - t).num_minutes();
+            let fix = vehicle.get();
+            let pl = place.get();
+            let arrival = fix.as_ref().zip(pl).map(|(f, p)| arrival_state(&coords, f, p, b));
+            let where_text = pl.and_then(|p| match p {
+                VehiclePlace::AtStop(i) => stops.get(i).map(|s| format!("na zastávce {}", s.name)),
+                VehiclePlace::Between(i) => stops.get(i).map(|s| format!("za zastávkou {}", s.name)),
+            });
+            let small = fix.as_ref().map(|f| vehicle_text(kind, f, where_text.as_deref(), t.timestamp()));
+            Some(view! {
+                <div class="trip-sum" class:stale=move || stale.get()>
+                    <div class="trip-sum-big">{summary_text(arrival, Some(minutes))}</div>
+                    {small.map(|s| view! { <div class="trip-sum-small">{s}</div> })}
+                </div>
+            })
+        }
+    };
+
+    // Značka vozu: piktogram v barvě linky a evidenční číslo.
+    let marker = move |top: String| {
+        let label = vehicle.with(|v| v.as_ref().and_then(|f| f.label.clone()));
+        view! {
+            <span class="veh-mark" class:stale=move || stale.get() style=format!("top:{top}")>
+                <VehicleIcon kind=kind color=color />
+                {label.map(|l| view! { <span class="veh-num">{l}</span> })}
+            </span>
+        }
+        .into_any()
+    };
 
     let body = {
         let stops = stops.clone();
@@ -118,6 +213,7 @@ pub fn TripDetail(
         move || {
             let t = at.get();
             let place_now = place.get();
+            let p = progress.get();
             let veh = place_now.map(|p| match p {
                 VehiclePlace::AtStop(i) | VehiclePlace::Between(i) => i,
             });
@@ -129,14 +225,6 @@ pub fn TripDetail(
             let to = if tail_open.get() { n.saturating_sub(1) } else { hi };
             let head_hidden = from;
             let tail_hidden = n.saturating_sub(to + 1);
-            let fix = vehicle.get();
-            let now_ts = t.timestamp();
-            let label = |fix: &Option<VehicleFix>| {
-                fix.as_ref().map(|f| {
-                    let stale = fix_freshness(f.timestamp, now_ts) == FixFreshness::Stale;
-                    view! { <div class="trip-vehicle" class:stale=stale>{vehicle_text(f, now_ts)}</div> }.into_any()
-                })
-            };
             let mut out = Vec::new();
             if head_hidden > 0 {
                 out.push(
@@ -147,19 +235,21 @@ pub fn TripDetail(
             if n > 0 {
                 for i in from..=to {
                     let s = &stops[i];
-                    if place_now == Some(VehiclePlace::AtStop(i)) {
-                        out.extend(label(&fix));
-                    }
-                    let passed = match place_now {
-                        Some(VehiclePlace::AtStop(v)) => i < v,
-                        Some(VehiclePlace::Between(v)) => i <= v,
-                        None => false,
+                    // Projetá část čáry: horní polovina řádku patří předchozímu úseku, dolní dalšímu.
+                    let (passed, fade_top, fade_bottom) = match place_now {
+                        Some(VehiclePlace::AtStop(v)) => (i < v, i <= v && i > 0, i < v),
+                        Some(VehiclePlace::Between(v)) => (i <= v, i <= v && i > 0, i <= v),
+                        None => (false, false, false),
                     };
                     let is_board = board == Some(i) || (board.is_none() && s.stop == dep_stop);
                     let delay = delays.with(|d| d.at(&trip_id, &s.gtfs_id));
+                    let at_stop = place_now == Some(VehiclePlace::AtStop(i));
                     out.push(
                         view! {
-                            <div class="trip-stop" class:board=is_board class:passed=passed>
+                            <div class="trip-stop" class:board=is_board class:passed=passed class:veh-here=at_stop>
+                                {fade_top.then(|| view! { <span class="rail-fade top"></span> })}
+                                {fade_bottom.then(|| view! { <span class="rail-fade bottom"></span> })}
+                                {at_stop.then(|| marker("50%".into()))}
                                 <span class="stop-name">
                                     {s.name.clone()}
                                     {is_board.then(|| view! { <span class="here">"tady stojíš"</span> })}
@@ -170,7 +260,18 @@ pub fn TripDetail(
                         .into_any(),
                     );
                     if place_now == Some(VehiclePlace::Between(i)) {
-                        out.extend(label(&fix));
+                        // Mezera mezi zastávkami, ve které vůz jede; projetá část čáry podle podílu úseku.
+                        // 15–85 %, aby štítek s číslem nezasahoval do názvů zastávek nad a pod mezerou.
+                        let pct = (15.0 + p.clamp(0.0, 1.0) * 70.0).round();
+                        out.push(
+                            view! {
+                                <div class="trip-gap">
+                                    <span class="rail-fade" style=format!("top:0;height:{pct}%")></span>
+                                    {marker(format!("{pct}%"))}
+                                </div>
+                            }
+                            .into_any(),
+                        );
                     }
                 }
             }
@@ -197,10 +298,11 @@ pub fn TripDetail(
                 })}
                 <button class="link" on:click=move |_| on_close.run(())>"Zpět"</button>
             </div>
-            <div class="trip-line">{body}</div>
+            {summary}
             <Show when=move || loaded.get() && place.get().is_none()>
                 <p class="muted small">"Poloha vozu není k dispozici."</p>
             </Show>
+            <div class="trip-line">{body}</div>
         </section>
     }
 }
@@ -223,9 +325,35 @@ mod tests {
 
     #[test]
     fn vehicle_text_fresh_and_stale() {
-        assert_eq!(vehicle_text(&fix(1_000), 1_030), "🚋 vůz 8758 · před 30 s");
-        assert_eq!(vehicle_text(&fix(1_000), 1_090), "🚋 vůz 8758 · před 1 min");
-        assert_eq!(vehicle_text(&fix(1_000), 1_180), "🚋 vůz 8758 · poloha před 3 min");
+        assert_eq!(vehicle_text(RouteKind::Bus, &fix(1_000), None, 1_030), "autobus 8758 · před 30 s");
+        assert_eq!(
+            vehicle_text(RouteKind::Tram, &fix(1_000), Some("za zastávkou Pohořelec"), 1_090),
+            "tramvaj 8758 · za zastávkou Pohořelec · před 1 min"
+        );
+        assert_eq!(vehicle_text(RouteKind::Bus, &fix(1_000), None, 1_180), "autobus 8758 · poloha před 3 min");
+    }
+
+    #[test]
+    fn summary_text_states() {
+        assert_eq!(summary_text(Some(ArrivalState::StopsAway(2)), Some(3)), "za 3 min · 2 zastávky");
+        assert_eq!(summary_text(Some(ArrivalState::StopsAway(1)), Some(0)), "teď · 1 zastávka");
+        assert_eq!(summary_text(Some(ArrivalState::StopsAway(5)), Some(-1)), "teď · 5 zastávek");
+        assert_eq!(summary_text(Some(ArrivalState::Arriving), Some(1)), "přijíždí");
+        assert_eq!(summary_text(Some(ArrivalState::AtStop), Some(0)), "ve stanici");
+        assert_eq!(summary_text(Some(ArrivalState::Departed), Some(-2)), "vůz už odjel");
+        assert_eq!(summary_text(None, Some(5)), "za 5 min");
+        assert_eq!(summary_text(None, Some(0)), "teď");
+        assert_eq!(summary_text(Some(ArrivalState::StopsAway(2)), None), "2 zastávky");
+    }
+
+    #[test]
+    fn kind_word_cs() {
+        assert_eq!(kind_word(RouteKind::Bus), "autobus");
+        assert_eq!(kind_word(RouteKind::Tram), "tramvaj");
+        assert_eq!(kind_word(RouteKind::Trolleybus), "trolejbus");
+        assert_eq!(kind_word(RouteKind::Metro), "metro");
+        assert_eq!(kind_word(RouteKind::Train), "vlak");
+        assert_eq!(kind_word(RouteKind::Ferry), "vůz");
     }
 
     #[test]

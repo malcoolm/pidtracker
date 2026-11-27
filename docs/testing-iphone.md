@@ -337,3 +337,17 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 
 - [ ] Statistiky: pod počtem jízd je „jízda“ u 1, „jízdy“ u 2–4 a „jízd“ u 0 a 5+ (přepínat
       týden / měsíc / rok, aby se počty změnily).
+
+## Kontrolní bod T – vůz na trase a za kolik přijede (#13)
+
+- [ ] Odjezdy → `›` u jedoucího autobusu: nahoře je velký souhrn „za N min · N zastávek“
+      (nebo „teď“), pod ním „autobus 1234 · za zastávkou X · před N s“.
+- [ ] Na čáře trasy je kolečko v barvě linky s bílým piktogramem autobusu a vedle žlutý
+      štítek s číslem vozu; stojí v mezeře mezi zastávkami a při obnově (po ~20 s) se posouvá.
+- [ ] Totéž u tramvaje (piktogram se sběračem) a trolejbusu (dvě tyče), u metra a vlaku
+      piktogram bez čísla vozu.
+- [ ] Projetá část čáry je bledší než zbytek.
+- [ ] Když vůz přijíždí (do 200 m), souhrn je „přijíždí“; když stojí na tvé zastávce,
+      „ve stanici“ a značka je místo tečky zastávky; po odjezdu „vůz už odjel“.
+- [ ] Režim letadlo: po 2 min značka i souhrn zešednou, po 10 min vůz zmizí.
+- [ ] Světlý i tmavý režim, vánoční vzhled.
