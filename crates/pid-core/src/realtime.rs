@@ -165,6 +165,26 @@ pub fn vehicle_for_trip(feed: &[u8], trip_id: &str) -> Option<String> {
     })
 }
 
+/// Evidenční čísla vozů, které právě jedou spoji `trip_ids` (jedno dekódování feedu pro celé
+/// spojení). Spoje bez vozu nebo bez čísla (metro, vlaky) ve výsledku nejsou.
+pub fn vehicles_for_trips(feed: &[u8], trip_ids: &[&str]) -> HashMap<String, String> {
+    if trip_ids.is_empty() {
+        return HashMap::new();
+    }
+    let Ok(msg) = FeedMessage::decode(feed) else { return HashMap::new() };
+    msg.entity
+        .into_iter()
+        .filter_map(|e| {
+            let vp = e.vehicle?;
+            let trip = vp.trip?.trip_id?;
+            if !trip_ids.contains(&trip.as_str()) {
+                return None;
+            }
+            Some((trip, vehicle_label(vp.vehicle?)?))
+        })
+        .collect()
+}
+
 /// Poloha vozu spoje z feedu `vehicle_positions.pb`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VehicleFix {
@@ -352,6 +372,21 @@ mod tests {
     fn falls_back_to_vehicle_id_suffix() {
         let bytes = feed(vec![entity("12_1_261025", None, "service-0-9355")]);
         assert_eq!(vehicle_for_trip(&bytes, "12_1_261025").as_deref(), Some("9355"));
+    }
+
+    #[test]
+    fn vehicles_for_several_trips_at_once() {
+        let bytes = feed(vec![
+            entity("244_3216_261024", Some("4189"), "service-3-4189"),
+            entity("22_41333_261017", Some("8758"), "service-0-8758"),
+            entity("991_1_1", None, "metro-A-9-9"),
+        ]);
+        let found = vehicles_for_trips(&bytes, &["22_41333_261017", "991_1_1", "9_9_9", "244_3216_261024"]);
+        assert_eq!(found.len(), 2);
+        assert_eq!(found.get("22_41333_261017").map(String::as_str), Some("8758"));
+        assert_eq!(found.get("244_3216_261024").map(String::as_str), Some("4189"));
+        assert!(vehicles_for_trips(b"\xff\xff garbage", &["22_41333_261017"]).is_empty());
+        assert!(vehicles_for_trips(&bytes, &[]).is_empty());
     }
 
     #[test]

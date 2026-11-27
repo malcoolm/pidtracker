@@ -1,9 +1,11 @@
 //! Realtime feed PID: číslo vozu a zpoždění (best effort, nikdy neblokuje záznam jízdy).
 
+use std::collections::HashMap;
+
 use gloo_net::http::Request;
 use leptos::prelude::WithUntracked;
 use pid_core::ride::apply_known_plate;
-use pid_core::realtime::{Delays, TRIP_UPDATES_URL, VEHICLE_POSITIONS_URL, VehicleFix, parse_trip_delays, vehicle_fix, vehicle_for_trip};
+use pid_core::realtime::{Delays, TRIP_UPDATES_URL, VEHICLE_POSITIONS_URL, VehicleFix, parse_trip_delays, vehicle_fix, vehicle_for_trip, vehicles_for_trips};
 
 use crate::state::AppState;
 use crate::util::now_fixed;
@@ -39,6 +41,17 @@ pub async fn fetch_delays() -> Option<Delays> {
     }
     let bytes = resp.binary().await.ok()?;
     Some(parse_trip_delays(&bytes))
+}
+
+/// Čísla vozů jedoucích spoji `trip_ids` (trip_id → číslo). Offline nebo chyba → `None`.
+pub async fn fetch_vehicles(trip_ids: &[String]) -> Option<HashMap<String, String>> {
+    let resp = Request::get(VEHICLE_POSITIONS_URL).send().await.ok()?;
+    if !resp.ok() {
+        return None;
+    }
+    let bytes = resp.binary().await.ok()?;
+    let ids: Vec<&str> = trip_ids.iter().map(String::as_str).collect();
+    Some(vehicles_for_trips(&bytes, &ids))
 }
 
 /// Poloha vozu spoje z `vehicle_positions.pb`. Offline, chyba nebo spoj ve feedu není → `None`.

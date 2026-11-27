@@ -1,5 +1,6 @@
 //! Detail spojení: svislá časová osa (chůze přerušovaně, jízdy v barvě linky).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -20,6 +21,8 @@ use crate::util::{css_color, duration_label, now, page_hidden};
 
 /// Jak často se přepočítá „Vyrazte do N min“ (jen místní čas, žádné stahování).
 const TICK_MS: u32 = 15_000;
+/// Jak často se stahují čísla vozů (feed poloh má ~500 kB).
+const VEHICLE_REFRESH_MS: u32 = 60_000;
 
 /// Čas události se zpožděním z živých dat (jen u jízdy, jinak holý čas).
 fn time_cell(
@@ -123,6 +126,7 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
     {
         let flag = alive.clone();
         on_cleanup(move || flag.store(false, Ordering::Relaxed));
+        let alive = alive.clone();
         spawn_local(async move {
             loop {
                 TimeoutFuture::new(TICK_MS).await;
@@ -153,6 +157,61 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
     }
 
     let ix = state.tt.get_untracked().index();
+
+    // Čísla vozů jízd spojení: hned a pak každou minutu, jen když je stránka vidět.
+    // Bez živých dat zůstává poslední známé číslo (vůz se během jízdy nemění), jinak nic.
+    let vehicles = RwSignal::new(HashMap::<String, String>::new());
+    let trip_ids: Vec<String> = ix
+        .as_ref()
+        .map(|ix| {
+            j.legs
+                .iter()
+                .filter_map(|l| match *l {
+                    Leg::Ride { trip, .. } => Some(ix.tt.trips[trip as usize].gtfs_id.clone()),
+                    Leg::Walk { .. } => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if !trip_ids.is_empty() {
+        let refresh = {
+            let alive = alive.clone();
+            move || {
+                let alive = alive.clone();
+                let trip_ids = trip_ids.clone();
+                spawn_local(async move {
+                    if let Some(found) = crate::realtime::fetch_vehicles(&trip_ids).await
+                        && alive.load(Ordering::Relaxed)
+                    {
+                        vehicles.update(|v| v.extend(found));
+                    }
+                });
+            }
+        };
+        {
+            let alive = alive.clone();
+            let refresh = refresh.clone();
+            spawn_local(async move {
+                loop {
+                    if !page_hidden() {
+                        refresh();
+                    }
+                    TimeoutFuture::new(VEHICLE_REFRESH_MS).await;
+                    if !alive.load(Ordering::Relaxed) {
+                        break;
+                    }
+                }
+            });
+        }
+        // Návrat z pozadí: hned čerstvá čísla vozů.
+        Effect::new(move |prev: Option<u32>| {
+            let f = state.foreground.get();
+            if prev.is_some_and(|p| p != f) {
+                refresh();
+            }
+            f
+        });
+    }
     // První jízda: kontrola „Ujelo“ podle živého zpoždění.
     let first = ix.as_ref().and_then(|ix| {
         j.legs.iter().find_map(|l| match *l {
@@ -231,6 +290,14 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
                     let board_ids = Some((trip_id.clone(), tt.stops[board_stop as usize].gtfs_id.clone()));
                     let alight_ids = Some((trip_id.clone(), tt.stops[alight_stop as usize].gtfs_id.clone()));
                     let platform = ix.platform(board_stop).map(|p| format!("nástupiště {p}"));
+                    let sub = {
+                        let trip_id = trip_id.clone();
+                        move || {
+                            let vehicle = vehicles.with(|v| v.get(&trip_id).map(|l| format!("🚋 vůz {l}")));
+                            let parts: Vec<String> = platform.iter().cloned().chain(vehicle).collect();
+                            (!parts.is_empty()).then(|| view! { <div class="jd-sub">{parts.join(" · ")}</div> })
+                        }
+                    };
                     rows.push(
                         row(
                             time_cell(dep, board_ids, delays, at),
@@ -244,7 +311,7 @@ pub fn JourneyDetail(j: Journey, delays: RwSignal<Delays>, on_close: Callback<()
                                     " → "
                                     {tt.string(t.headsign).to_string()}
                                 </div>
-                                {platform.map(|p| view! { <div class="jd-sub">{p}</div> })}
+                                {sub}
                             },
                             "",
                         )

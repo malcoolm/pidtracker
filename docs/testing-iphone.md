@@ -286,3 +286,12 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 - [ ] Totéž na kartě spojení, v odjezdech, v historii a v pruhu Mimořádností.
 - [ ] Jednoznakové (`C`, `A`) i delší (`S49`, `X-A`, `119`) linky, ve světlém i tmavém režimu
       a s `?vanoce=1`.
+
+## Kontrolní bod N – číslo vozu v detailu spojení (#1)
+
+- [ ] Vyhledat spojení s tramvají nebo autobusem, který už jede (odjezd do pár minut),
+      a klepnout na něj. U nástupu je pod názvem zastávky „🚋 vůz 1234“, případně
+      „nástupiště B · 🚋 vůz 1234“.
+- [ ] U jízdy, jejíž spoj ještě nevyjel, a u metra nebo vlaku se číslo vozu nezobrazí
+      a detail vypadá jako dřív.
+- [ ] V režimu letadlo: detail spojení se otevře a funguje, jen bez čísla vozu.
