@@ -363,3 +363,12 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 - [ ] Vůz stojící na zastávce se rozjede až po odjezdu podle jízdního řádu a zpoždění.
 - [ ] Režim letadlo: po 2 min značka zešedne a přestane se hýbat.
 - [ ] Telefon se nezahřívá a baterie neubývá znatelně rychleji než dřív.
+
+## Kontrolní bod V – čas nástupu u spoje, který právě odjel (#22)
+
+- [ ] Nová jízda → zastávka → „▸ Právě odjelo“ → zvolit spoj, který odjel před 1–4 min →
+      Start: probíhající jízda i historie mají čas nástupu podle odjezdu spoje (jízdní řád +
+      zpoždění), ne čas klepnutí.
+- [ ] Spoj, který ještě neodjel → Start: čas nástupu je čas klepnutí jako dřív.
+- [ ] Ruční zadání linky (bez spoje) → čas klepnutí.
+- [ ] Čas nástupu jde upravit v editaci jízdy.

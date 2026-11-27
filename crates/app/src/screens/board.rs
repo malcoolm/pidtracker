@@ -10,7 +10,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use pid_core::realtime::Delays;
 use pid_core::ride::{Ride, RideStatus, RouteKind};
-use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows, pick_row};
+use pid_core::timetable::query::{BoardRow, DepartureSource, NearbyGroup, board_rows, pick_row, ride_start, RIDE_START_MAX_PAST_MIN};
 
 use crate::components::{DataBanner, DepTime, RouteBadge};
 use crate::screens::TripDetail;
@@ -23,7 +23,7 @@ use crate::util::{css_color, kind_color, now, now_fixed, page_hidden};
 /// Okno dotazu do jízdního řádu (zpožděné spoje mohou mít čas v minulosti).
 const BEFORE_MIN: i64 = 15;
 /// „Právě odjelo“ – jak daleko do minulosti.
-const RECENT_MIN: i64 = 5;
+const RECENT_MIN: i64 = RIDE_START_MAX_PAST_MIN;
 const AFTER_MIN: i64 = 30;
 const TICK_MS: u32 = 30_000;
 const DELAYS_REFRESH_MS: u32 = 60_000;
@@ -265,6 +265,12 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
         started.set(true);
         let ix = state.tt.get_untracked().index();
         let t = now_fixed();
+        let row = match choice.get_untracked() {
+            LineChoice::Manual => None,
+            _ => selected_row.get_untracked(),
+        };
+        // Spoj, který právě odjel: jízda začíná jeho odjezdem (jízdní řád + zpoždění), ne klepnutím (#22).
+        let board_time = ride_start(row.as_ref().map(|r| r.expected), now()).fixed_offset();
         let f = fix.get_untracked();
         let group = selected_group.get_untracked();
         let mut ride = Ride {
@@ -278,7 +284,7 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             headsign: String::new(),
             trip_id: String::new(),
             pattern_id: None,
-            board_time: t,
+            board_time,
             alight_stop_id: None,
             alight_stop_name: None,
             alight_time: None,
@@ -301,10 +307,6 @@ pub fn Board(group: Option<u32>) -> impl IntoView {
             ride.board_stop_name = ix.tt.group_name(g).to_string();
             ride.board_stop_id = ix.tt.stops[ix.group_first_stop(g) as usize].gtfs_id.clone();
         }
-        let row = match choice.get_untracked() {
-            LineChoice::Manual => None,
-            _ => selected_row.get_untracked(),
-        };
         match row {
             Some(r) => {
                 let d = r.dep;

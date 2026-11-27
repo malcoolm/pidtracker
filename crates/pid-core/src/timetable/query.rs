@@ -336,6 +336,20 @@ pub fn pick_row(up: &[BoardRow], recent: &[BoardRow], chosen: Option<&BoardRow>)
     }
 }
 
+/// Jak daleko do minulosti smí jít čas nástupu převzatý z odjezdu spoje (#22); stejné okno
+/// jako „Právě odjelo“ na tabuli.
+pub const RIDE_START_MAX_PAST_MIN: i64 = 5;
+
+/// Čas nástupu nové jízdy (#22): když zvolený spoj už odjel (`expected` = jízdní řád +
+/// zpoždění) a nejvýš před [`RIDE_START_MAX_PAST_MIN`] minutami, jízda začíná jeho odjezdem;
+/// jinak časem klepnutí na Start (`now`).
+pub fn ride_start(expected: Option<DateTime<Tz>>, now: DateTime<Tz>) -> DateTime<Tz> {
+    match expected {
+        Some(e) if e < now && now - e <= Duration::minutes(RIDE_START_MAX_PAST_MIN) => e,
+        _ => now,
+    }
+}
+
 /// „za 3 min“, „teď“, „před 3 min“ (celé minuty, okolí ±1 min je „teď“).
 pub fn when_label(expected: DateTime<Tz>, now: DateTime<Tz>) -> String {
     let m = (expected - now).num_minutes();
@@ -636,6 +650,19 @@ mod when_tests {
 
     fn go_t(h: u32, m: u32, sec: u32) -> DateTime<Tz> {
         TZ.with_ymd_and_hms(2026, 11, 16, h, m, sec).unwrap()
+    }
+
+    #[test]
+    fn ride_start_from_departed_trip() {
+        let now = go_t(12, 0, 0);
+        // Spoj odjel v 11:58 (jízdní řád + zpoždění) → jízda začíná v 11:58.
+        assert_eq!(ride_start(Some(go_t(11, 58, 0)), now), go_t(11, 58, 0));
+        // Hranice okna 5 min: 11:55 ještě ano, 11:54:59 už ne.
+        assert_eq!(ride_start(Some(go_t(11, 55, 0)), now), go_t(11, 55, 0));
+        assert_eq!(ride_start(Some(go_t(11, 54, 59)), now), now);
+        // Spoj ještě neodjel, nebo žádný spoj → čas klepnutí.
+        assert_eq!(ride_start(Some(go_t(12, 3, 0)), now), now);
+        assert_eq!(ride_start(None, now), now);
     }
 
     #[test]
