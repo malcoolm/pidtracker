@@ -335,11 +335,14 @@ pub fn segment_progress(stops: &[(f64, f64)], fix: &VehicleFix, i: usize) -> f32
 pub const MIN_SEGMENT_S: i64 = 30;
 /// Od kolika sekund po GPS poloze ukazuje značka odhad (#15).
 pub const ESTIMATE_AFTER_S: i64 = 10;
+/// Jak dlouho vůz viděný na zastávce nejméně stojí, než ho odhad rozjede (i když už
+/// podle jízdního řádu a zpoždění měl odjet; zpožděné vozy GPS vidí na zastávce až po něm).
+pub const DWELL_S: i64 = 20;
 
 /// Odhad, kde vůz je v čase `now_ts` (#15): z GPS místa (`place`, `progress` u `Between`) v čase
 /// `fix_ts` se posouvá podle jízdních dob mezi zastávkami (`stop_times` = unixové časy zastávek
 /// trasy, jízdní řád + zpoždění). Nikdy nejede za další zastávku (podíl úseku nejvýš 1).
-/// Na zastávce stojí do odjezdu, pak se rozjede. Bez `fix_ts` nebo s polohou „z budoucnosti“
+/// Na zastávce stojí do odjezdu (nejméně [`DWELL_S`] od GPS polohy), pak se rozjede. Bez `fix_ts` nebo s polohou „z budoucnosti“
 /// vrací vstup beze změny.
 pub fn estimate_place(place: VehiclePlace, progress: f32, stop_times: &[i64], fix_ts: Option<i64>, now_ts: i64) -> (VehiclePlace, f32) {
     let unchanged = (place, progress);
@@ -358,7 +361,7 @@ pub fn estimate_place(place: VehiclePlace, progress: f32, stop_times: &[i64], fi
         },
         VehiclePlace::AtStop(i) => {
             let (Some(d), Some(&dep)) = (duration(i), stop_times.get(i)) else { return unchanged };
-            let start = fix_ts.max(dep);
+            let start = (fix_ts + DWELL_S).max(dep);
             if now_ts <= start {
                 (place, 0.0)
             } else {
@@ -860,6 +863,20 @@ mod estimate_tests {
         let (pl, p) = estimate_place(VehiclePlace::AtStop(1), 0.0, &times(), Some(t1 - 30), t1 + 60);
         assert_eq!(pl, VehiclePlace::Between(1));
         assert!((p - 0.5).abs() < 0.01, "{p}");
+    }
+
+    #[test]
+    fn at_stop_dwells_even_after_departure_time() {
+        // Vůz zpožděný: GPS ho vidí na zastávce až po čase odjezdu. Nesmí se „rozjet“ hned,
+        // nejdřív stojí aspoň DWELL_S od GPS polohy.
+        let t1 = FIX + 120;
+        let fix = t1 + 30;
+        let r = estimate_place(VehiclePlace::AtStop(1), 0.0, &times(), Some(fix), fix + 5);
+        assert_eq!(r, (VehiclePlace::AtStop(1), 0.0));
+        let r = estimate_place(VehiclePlace::AtStop(1), 0.0, &times(), Some(fix), fix + DWELL_S);
+        assert_eq!(r, (VehiclePlace::AtStop(1), 0.0));
+        let (pl, _) = estimate_place(VehiclePlace::AtStop(1), 0.0, &times(), Some(fix), fix + DWELL_S + 30);
+        assert_eq!(pl, VehiclePlace::Between(1));
     }
 
     #[test]

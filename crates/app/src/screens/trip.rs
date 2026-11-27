@@ -115,6 +115,7 @@ pub fn TripDetail(
     let color = row.dep.color;
 
     let at = RwSignal::new(now());
+    let now_s = RwSignal::new(now().timestamp());
     let head_open = RwSignal::new(false);
     let tail_open = RwSignal::new(false);
 
@@ -125,7 +126,7 @@ pub fn TripDetail(
     let vehicle = {
         let trip_id = trip_id.clone();
         Memo::new(move |_| {
-            let now_ts = at.get().timestamp();
+            let now_ts = now_s.get();
             state.positions.with(|p| {
                 p.as_ref()
                     .and_then(|p| p.fixes.get(&trip_id).cloned())
@@ -139,26 +140,29 @@ pub fn TripDetail(
         state.positions.track();
         at.set(now());
     });
-    // Hodiny: `now_s` po 1 s jen pro posun značky (#15), `at` po 15 s pro časy a stáří polohy
-    // (i offline bez nových dat). Seznam zastávek se tak nepřekresluje každou sekundu.
-    let now_s = RwSignal::new(now().timestamp());
+    // Hodiny: `now_s` po 1 s pro posun značky a stáří polohy (#15), `at` po 15 s pro časy
+    // v seznamu zastávek, který se tak nepřekresluje každou sekundu.
     {
         let alive = Arc::new(AtomicBool::new(true));
         let flag = alive.clone();
         on_cleanup(move || flag.store(false, Ordering::Relaxed));
         spawn_local(async move {
             let mut ticks = 0u32;
+            let mut was_hidden = false;
             loop {
                 TimeoutFuture::new(MOVE_TICK_MS).await;
                 if !alive.load(Ordering::Relaxed) {
                     break;
                 }
                 if page_hidden() {
+                    was_hidden = true;
                     continue;
                 }
                 now_s.set(now().timestamp());
                 ticks += 1;
-                if ticks * MOVE_TICK_MS >= TICK_MS {
+                // Po návratu z pozadí hned přepočítat i časy a stáří v seznamu.
+                if was_hidden || ticks * MOVE_TICK_MS >= TICK_MS {
+                    was_hidden = false;
                     ticks = 0;
                     at.set(now());
                 }
@@ -193,6 +197,9 @@ pub fn TripDetail(
         let now_ts = now_s.get();
         let gps = (place.get(), progress.get());
         vehicle.with(|v| match (v, gps.0) {
+            // Z mé zastávky odhad vůz nerozjede: odjezd musí potvrdit nová poloha (jinak by
+            // řádek „tady stojíš“ vypadal projetý, zatímco vůz ještě stojí).
+            (Some(_), Some(VehiclePlace::AtStop(i))) if Some(i) == board => gps,
             (Some(f), Some(pl)) if fix_freshness(f.timestamp, now_ts) == FixFreshness::Fresh => {
                 let (pl, p) = stop_times.with(|t| estimate_place(pl, gps.1, t, f.timestamp, now_ts));
                 (Some(pl), p)
@@ -209,7 +216,7 @@ pub fn TripDetail(
         })
     });
     let stale = Memo::new(move |_| {
-        let now_ts = at.get().timestamp();
+        let now_ts = now_s.get();
         vehicle.with(|v| v.as_ref().is_some_and(|f| fix_freshness(f.timestamp, now_ts) == FixFreshness::Stale))
     });
 
