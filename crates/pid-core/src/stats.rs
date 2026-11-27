@@ -199,6 +199,15 @@ fn filtered_by_person<'a>(rides: &'a [Ride], q: &StatsQuery) -> BTreeMap<String,
 /// Vzdálenost jízdy v metrech, pokud ji jde určit (počítá se z jízdního řádu mimo `pid-core::stats`).
 pub type DistanceFn<'a> = &'a dyn Fn(&Ride) -> Option<f64>;
 
+/// Slovo k počtu jízd: „1 jízda“, „3 jízdy“, „5 jízd“ (jako `stops_text`).
+pub fn rides_word(n: u32) -> &'static str {
+    match n {
+        1 => "jízda",
+        2..=4 => "jízdy",
+        _ => "jízd",
+    }
+}
+
 /// „0 km“, „3,4 km“, „84 km“, „1 235 km“.
 pub fn km_label(meters: f64) -> String {
     let km = meters / 1000.0;
@@ -441,6 +450,17 @@ mod tests {
         // Neznámá vzdálenost jízdy součet nekazí.
         let some = |r: &Ride| (r.id != "t1").then_some(1_000.0);
         assert_eq!(person(&compute(&all, &month(10), &some), TATA).distance_m, 2_000.0);
+    }
+
+    #[test]
+    fn rides_word_plural() {
+        assert_eq!(rides_word(0), "jízd");
+        assert_eq!(rides_word(1), "jízda");
+        assert_eq!(rides_word(2), "jízdy");
+        assert_eq!(rides_word(4), "jízdy");
+        assert_eq!(rides_word(5), "jízd");
+        assert_eq!(rides_word(21), "jízd");
+        assert_eq!(rides_word(124), "jízd");
     }
 
     #[test]

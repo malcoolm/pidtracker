@@ -332,3 +332,8 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 - [ ] Šipkami na předchozí/další období se kilometry přepočítají; období bez jízd má „0 km“.
 - [ ] „Já“, druhá osoba i „Oba“ mají kilometry; u „Oba“ jsou součtem obou.
 - [ ] Hodnota je rozumná pro známou trasu (např. tramvaj 22 Malovanka → Národní třída asi 5 km).
+
+## Kontrolní bod S – skloňování počtu jízd (#21)
+
+- [ ] Statistiky: pod počtem jízd je „jízda“ u 1, „jízdy“ u 2–4 a „jízd“ u 0 a 5+ (přepínat
+      týden / měsíc / rok, aby se počty změnily).

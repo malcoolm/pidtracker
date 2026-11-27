@@ -3,7 +3,7 @@
 use leptos::prelude::*;
 use std::collections::HashMap;
 
-use pid_core::stats::{Period, PeriodKind, PersonStats, StatsQuery, compute, compute_combined, km_label};
+use pid_core::stats::{Period, PeriodKind, PersonStats, StatsQuery, compute, compute_combined, km_label, rides_word};
 
 use crate::state::AppState;
 use crate::util::{css_color, duration_label, kind_color, now};
@@ -124,7 +124,7 @@ fn PersonCard(stats: PersonStats, #[prop(optional)] title: Option<String>) -> im
         <article class="card">
             <h3>{name}</h3>
             <div class="kpis">
-                <div><strong>{stats.rides}</strong><span>"jízd"</span></div>
+                <div><strong>{stats.rides}</strong><span>{rides_word(stats.rides)}</span></div>
                 <div><strong>{duration_label(stats.minutes)}</strong><span>"v MHD"</span></div>
                 <div><strong>{km_label(stats.distance_m)}</strong><span>"ujeto"</span></div>
             </div>
