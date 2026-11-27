@@ -201,21 +201,37 @@ pub fn vehicle_fix(feed: &[u8], trip_id: &str) -> Option<VehicleFix> {
     if trip_id.is_empty() {
         return None;
     }
-    let msg = FeedMessage::decode(feed).ok()?;
-    msg.entity.into_iter().find_map(|e| {
-        let vp = e.vehicle?;
-        if vp.trip?.trip_id.as_deref() != Some(trip_id) {
-            return None;
-        }
-        let pos = vp.position?;
-        Some(VehicleFix {
+    parse_vehicle_fixes(feed).remove(trip_id)
+}
+
+/// Polohy všech jedoucích vozů z feedu `vehicle_positions.pb` podle `trip_id` (jedno
+/// dekódování pro celou aplikaci). Entity bez polohy se přeskočí; je-li spoj ve feedu
+/// víckrát, platí první výskyt s polohou. Neplatný feed → prázdná tabulka.
+pub fn parse_vehicle_fixes(feed: &[u8]) -> HashMap<String, VehicleFix> {
+    let mut out = HashMap::new();
+    let Ok(msg) = FeedMessage::decode(feed) else { return out };
+    for e in msg.entity {
+        let Some(vp) = e.vehicle else { continue };
+        let (Some(trip), Some(pos)) = (vp.trip.and_then(|t| t.trip_id), vp.position) else { continue };
+        out.entry(trip).or_insert_with(|| VehicleFix {
             label: vp.vehicle.and_then(vehicle_label),
             lat: f64::from(pos.latitude),
             lon: f64::from(pos.longitude),
             stop_sequence: vp.current_stop_sequence,
             timestamp: vp.timestamp.and_then(|t| i64::try_from(t).ok()),
-        })
-    })
+        });
+    }
+    out
+}
+
+/// Jak stará smí být sdílená data poloh, než se stáhnou znovu (#14).
+pub const POSITIONS_MAX_AGE_MS: f64 = 20_000.0;
+
+/// Má se teď stáhnout feed poloh? Jen když ho aspoň jedna obrazovka potřebuje, stránka je
+/// vidět, žádné stahování neběží a data chybí nebo jsou starší než [`POSITIONS_MAX_AGE_MS`].
+/// Záporné stáří (posunuté hodiny) se bere jako zastaralé, aby stahování neuvázlo.
+pub fn should_fetch_positions(subscribers: u32, hidden: bool, in_flight: bool, age_ms: Option<f64>) -> bool {
+    subscribers > 0 && !hidden && !in_flight && age_ms.is_none_or(|a| !(0.0..POSITIONS_MAX_AGE_MS).contains(&a))
 }
 
 /// Kde na trase vůz je.
@@ -563,5 +579,68 @@ mod place_tests {
             })
         );
         assert_eq!(vehicle_fix(&bytes, "nope"), None);
+    }
+}
+
+#[cfg(test)]
+mod store_tests {
+    use super::*;
+    use prost::Message;
+
+    fn ent(trip: &str, label: &str, pos: Option<(f32, f32)>, seq: Option<u32>) -> FeedEntity {
+        FeedEntity {
+            id: format!("{trip}_{label}"),
+            trip_update: None,
+            alert: None,
+            vehicle: Some(VehiclePosition {
+                trip: Some(TripDescriptor { trip_id: Some(trip.into()) }),
+                vehicle: Some(VehicleDescriptor { id: Some(format!("service-0-{label}")), label: Some(label.into()) }),
+                position: pos.map(|(latitude, longitude)| Position { latitude, longitude }),
+                current_stop_sequence: seq,
+                timestamp: Some(1_800_000_000),
+            }),
+        }
+    }
+
+    fn feed(entities: Vec<FeedEntity>) -> Vec<u8> {
+        FeedMessage { entity: entities }.encode_to_vec()
+    }
+
+    #[test]
+    fn parse_fixes_maps_trips_with_position() {
+        let bytes = feed(vec![
+            ent("22_1_1", "8758", Some((50.5, 14.25)), Some(7)),
+            ent("180_2_2", "4189", Some((50.0, 14.5)), None),
+            ent("9_3_3", "9322", None, None),
+        ]);
+        let fixes = parse_vehicle_fixes(&bytes);
+        assert_eq!(fixes.len(), 2);
+        let f = &fixes["22_1_1"];
+        assert_eq!(f.label.as_deref(), Some("8758"));
+        assert_eq!(f.lat, 50.5);
+        assert_eq!(f.stop_sequence, Some(7));
+        assert_eq!(fixes["180_2_2"].label.as_deref(), Some("4189"));
+    }
+
+    #[test]
+    fn parse_fixes_first_duplicate_wins() {
+        let bytes = feed(vec![ent("22_1_1", "1", Some((50.0, 14.0)), None), ent("22_1_1", "2", Some((50.0, 14.0)), None)]);
+        assert_eq!(parse_vehicle_fixes(&bytes)["22_1_1"].label.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn parse_fixes_garbage_is_empty() {
+        assert!(parse_vehicle_fixes(b"\xff\xff").is_empty());
+    }
+
+    #[test]
+    fn should_fetch_rules() {
+        assert!(!should_fetch_positions(0, false, false, None));
+        assert!(!should_fetch_positions(1, true, false, None));
+        assert!(!should_fetch_positions(1, false, true, None));
+        assert!(should_fetch_positions(1, false, false, None));
+        assert!(!should_fetch_positions(1, false, false, Some(5_000.0)));
+        assert!(should_fetch_positions(2, false, false, Some(20_000.0)));
+        assert!(should_fetch_positions(1, false, false, Some(-1.0)));
     }
 }
