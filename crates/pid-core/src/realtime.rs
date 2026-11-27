@@ -171,7 +171,7 @@ pub struct VehicleFix {
     pub label: Option<String>,
     pub lat: f64,
     pub lon: f64,
-    /// Pořadí zastávky, ke které vůz míří (GTFS `stop_sequence`, u PID 1..n).
+    /// Pořadí poslední dosažené zastávky (GTFS `stop_sequence`, u PID 1..n); viz [`place_vehicle`].
     pub stop_sequence: Option<u32>,
     pub timestamp: Option<i64>,
 }
@@ -212,22 +212,51 @@ const AT_STOP_M: f64 = 50.0;
 const MAX_OFF_ROUTE_M: f64 = 300.0;
 
 /// Umístí vůz na trasu zadanou souřadnicemi zastávek (lat, lon) v pořadí jízdy.
+///
+/// `current_stop_sequence` je ve feedu PID **poslední dosažená zastávka**, ne další, jak
+/// říká specifikace GTFS-RT: na další zastávku feed přepne až asi 50–100 m před ní
+/// (ověřeno 2026-11-27, #8). Vůz je tedy na úseku `seq−1 → seq` (přijíždí) nebo
+/// `seq → seq+1` (odjel); který to je, rozhodne GPS. Bez `seq` se hledá nejbližší úsek celé trasy.
 pub fn place_vehicle(stops: &[(f64, f64)], fix: &VehicleFix) -> Option<VehiclePlace> {
     let dist = |i: usize| crate::geo::haversine_m(fix.lat, fix.lon, stops[i].0, stops[i].1);
-    if let Some(s) = fix.stop_sequence.map(|s| s as usize).filter(|s| (1..=stops.len()).contains(s)) {
-        let next = s - 1;
-        return Some(if next == 0 || dist(next) <= AT_STOP_M {
-            VehiclePlace::AtStop(next)
-        } else {
-            VehiclePlace::Between(next - 1)
-        });
-    }
-    // Nejbližší úsek lomené čáry; ekvirektangulární projekce kolem polohy vozu (metry).
+    let last_seg = stops.len().checked_sub(2);
+    let i = match fix.stop_sequence.map(|s| s as usize).filter(|s| (1..=stops.len()).contains(s)) {
+        Some(seq) => {
+            let Some(last_seg) = last_seg else { return Some(VehiclePlace::AtStop(0)) };
+            let reached = seq - 1;
+            // Feedu věříme, i když je GPS dál od přímkové trasy.
+            nearest_segment(stops, fix, reached.saturating_sub(1)..=reached.min(last_seg))?.0
+        }
+        None => {
+            let (i, d) = nearest_segment(stops, fix, 0..=last_seg?)?;
+            if d > MAX_OFF_ROUTE_M {
+                return None;
+            }
+            i
+        }
+    };
+    // U zastávky (konec i začátek úseku; vůz může být kousek za ní) = na zastávce.
+    Some(if dist(i + 1) <= AT_STOP_M {
+        VehiclePlace::AtStop(i + 1)
+    } else if dist(i) <= AT_STOP_M {
+        VehiclePlace::AtStop(i)
+    } else {
+        VehiclePlace::Between(i)
+    })
+}
+
+/// Nejbližší úsek `i → i+1` z rozsahu a vzdálenost vozu od něj (m).
+fn nearest_segment(
+    stops: &[(f64, f64)],
+    fix: &VehicleFix,
+    segments: std::ops::RangeInclusive<usize>,
+) -> Option<(usize, f64)> {
+    // Ekvirektangulární projekce kolem polohy vozu (metry).
     let k = 111_320.0;
     let cos = fix.lat.to_radians().cos();
     let xy = |(lat, lon): (f64, f64)| ((lon - fix.lon) * k * cos, (lat - fix.lat) * k);
     let mut best: Option<(usize, f64)> = None;
-    for i in 0..stops.len().saturating_sub(1) {
+    for i in segments.filter(|i| i + 1 < stops.len()) {
         let (a, b) = (xy(stops[i]), xy(stops[i + 1]));
         let (dx, dy) = (b.0 - a.0, b.1 - a.1);
         let len2 = dx * dx + dy * dy;
@@ -237,18 +266,7 @@ pub fn place_vehicle(stops: &[(f64, f64)], fix: &VehicleFix) -> Option<VehiclePl
             best = Some((i, d));
         }
     }
-    let (i, d) = best?;
-    if d > MAX_OFF_ROUTE_M {
-        return None;
-    }
-    // U zastávky (konec i začátek úseku; vůz může být kousek za ní) = na zastávce.
-    Some(if dist(i + 1) <= AT_STOP_M {
-        VehiclePlace::AtStop(i + 1)
-    } else if dist(i) <= AT_STOP_M {
-        VehiclePlace::AtStop(i)
-    } else {
-        VehiclePlace::Between(i)
-    })
+    best
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -447,10 +465,28 @@ mod place_tests {
 
     #[test]
     fn place_by_stop_sequence() {
-        assert_eq!(place_vehicle(&STOPS, &fix(50.00675, 14.4, Some(3))), Some(VehiclePlace::Between(1)));
-        // Míří na první zastávku, nebo je u cílové zastávky do 50 m.
+        // Feed hlásí poslední dosaženou zastávku (seq 2 = index 1), vůz už odjel → za ní.
+        assert_eq!(place_vehicle(&STOPS, &fix(50.00675, 14.4, Some(2))), Some(VehiclePlace::Between(1)));
+        // Feed už přepnul na další zastávku, vůz je ~90 m před ní → přijíždí.
+        assert_eq!(place_vehicle(&STOPS, &fix(50.0082, 14.4, Some(3))), Some(VehiclePlace::Between(1)));
+        // Do 50 m od zastávky = na zastávce, i když feed ještě nepřepnul.
+        assert_eq!(place_vehicle(&STOPS, &fix(50.0046, 14.4, Some(2))), Some(VehiclePlace::AtStop(1)));
+        assert_eq!(place_vehicle(&STOPS, &fix(50.0088, 14.4, Some(2))), Some(VehiclePlace::AtStop(2)));
+        // Začátek a konec trasy.
         assert_eq!(place_vehicle(&STOPS, &fix(50.0, 14.4, Some(1))), Some(VehiclePlace::AtStop(0)));
+        assert_eq!(place_vehicle(&STOPS, &fix(50.002, 14.4, Some(1))), Some(VehiclePlace::Between(0)));
         assert_eq!(place_vehicle(&STOPS, &fix(50.0090, 14.4, Some(3))), Some(VehiclePlace::AtStop(2)));
+        // Feedu věříme i daleko od přímkové trasy (zakřivený úsek).
+        assert_eq!(place_vehicle(&STOPS, &fix(50.00675, 14.41, Some(2))), Some(VehiclePlace::Between(1)));
+        // Trasa s jedinou zastávkou.
+        assert_eq!(place_vehicle(&STOPS[..1], &fix(50.01, 14.4, Some(1))), Some(VehiclePlace::AtStop(0)));
+    }
+
+    /// Hlášení #8: linka 180, feed hlásí Vypich, autobus je 20 s před Břevnovskou.
+    #[test]
+    fn line_180_after_vypich_is_before_brevnovska() {
+        let stops = [(50.075882, 14.345051), (50.079842, 14.347570), (50.085361, 14.364766)]; // Šafránecká, Vypich, Břevnovská
+        assert_eq!(place_vehicle(&stops, &fix(50.08426, 14.36133, Some(2))), Some(VehiclePlace::Between(1)));
     }
 
     #[test]
