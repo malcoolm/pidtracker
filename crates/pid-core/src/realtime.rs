@@ -207,11 +207,18 @@ pub fn parse_vehicle_fixes(feed: &[u8]) -> HashMap<String, VehicleFix> {
 /// Jak stará smí být sdílená data poloh, než se stáhnou znovu (#14).
 pub const POSITIONS_MAX_AGE_MS: f64 = 20_000.0;
 
+/// Stahování běžící déle než tohle se považuje za ztracené (iOS uspí PWA uprostřed požadavku,
+/// fetch nemá timeout) a už další stažení neblokuje.
+pub const POSITIONS_FETCH_STUCK_MS: f64 = 30_000.0;
+
 /// Má se teď stáhnout feed poloh? Jen když ho aspoň jedna obrazovka potřebuje, stránka je
-/// vidět, žádné stahování neběží a data chybí nebo jsou starší než [`POSITIONS_MAX_AGE_MS`].
-/// Záporné stáří (posunuté hodiny) se bere jako zastaralé, aby stahování neuvázlo.
-pub fn should_fetch_positions(subscribers: u32, hidden: bool, in_flight: bool, age_ms: Option<f64>) -> bool {
-    subscribers > 0 && !hidden && !in_flight && age_ms.is_none_or(|a| !(0.0..POSITIONS_MAX_AGE_MS).contains(&a))
+/// vidět, žádné stahování neběží (`in_flight_ms` = jak dlouho běží; po
+/// [`POSITIONS_FETCH_STUCK_MS`] se nebere v úvahu) a data chybí nebo jsou starší než
+/// [`POSITIONS_MAX_AGE_MS`]. Záporné časy (posunuté hodiny) se berou jako zastaralé, aby
+/// stahování neuvázlo.
+pub fn should_fetch_positions(subscribers: u32, hidden: bool, in_flight_ms: Option<f64>, age_ms: Option<f64>) -> bool {
+    let fetching = in_flight_ms.is_some_and(|f| (0.0..POSITIONS_FETCH_STUCK_MS).contains(&f));
+    subscribers > 0 && !hidden && !fetching && age_ms.is_none_or(|a| !(0.0..POSITIONS_MAX_AGE_MS).contains(&a))
 }
 
 /// Kde na trase vůz je.
@@ -600,12 +607,20 @@ mod store_tests {
 
     #[test]
     fn should_fetch_rules() {
-        assert!(!should_fetch_positions(0, false, false, None));
-        assert!(!should_fetch_positions(1, true, false, None));
-        assert!(!should_fetch_positions(1, false, true, None));
-        assert!(should_fetch_positions(1, false, false, None));
-        assert!(!should_fetch_positions(1, false, false, Some(5_000.0)));
-        assert!(should_fetch_positions(2, false, false, Some(20_000.0)));
-        assert!(should_fetch_positions(1, false, false, Some(-1.0)));
+        assert!(!should_fetch_positions(0, false, None, None));
+        assert!(!should_fetch_positions(1, true, None, None));
+        assert!(!should_fetch_positions(1, false, Some(1_000.0), None));
+        assert!(should_fetch_positions(1, false, None, None));
+        assert!(!should_fetch_positions(1, false, None, Some(5_000.0)));
+        assert!(should_fetch_positions(2, false, None, Some(20_000.0)));
+        assert!(should_fetch_positions(1, false, None, Some(-1.0)));
+    }
+
+    #[test]
+    fn stuck_fetch_does_not_block_forever() {
+        // Stahování, které se do 30 s nedokončilo (uspaný iOS, špatná síť), už neblokuje.
+        assert!(!should_fetch_positions(1, false, Some(29_000.0), Some(60_000.0)));
+        assert!(should_fetch_positions(1, false, Some(30_000.0), Some(60_000.0)));
+        assert!(should_fetch_positions(1, false, Some(-5.0), Some(60_000.0)));
     }
 }

@@ -38,18 +38,22 @@ fn try_fetch(state: AppState) {
     let go = should_fetch_positions(
         state.positions_subs.get_untracked(),
         page_hidden(),
-        state.positions_in_flight.get_untracked(),
+        state.positions_in_flight.get_untracked().map(|since| js_sys::Date::now() - since),
         age_ms(state),
     );
     if !go {
         return;
     }
-    state.positions_in_flight.set(true);
+    let started = js_sys::Date::now();
+    state.positions_in_flight.set(Some(started));
     spawn_local(async move {
         if let Some(fixes) = fetch().await {
             state.positions.set(Some(Positions { fixes: Arc::new(fixes), fetched_ms: js_sys::Date::now() }));
         }
-        state.positions_in_flight.set(false);
+        // Zaseknuté stahování, které doběhne pozdě, nesmí uvolnit novější běžící stahování.
+        if state.positions_in_flight.get_untracked() == Some(started) {
+            state.positions_in_flight.set(None);
+        }
     });
 }
 

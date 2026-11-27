@@ -89,8 +89,8 @@ pub struct AppState {
     pub positions: RwSignal<Option<crate::positions::Positions>>,
     /// Kolik obrazovek polohu vozů právě potřebuje.
     pub positions_subs: RwSignal<u32>,
-    /// Feed poloh se právě stahuje.
-    pub positions_in_flight: RwSignal<bool>,
+    /// Kdy začalo právě běžící stahování feedu poloh (`Date.now()`, ms).
+    pub positions_in_flight: RwSignal<Option<f64>>,
 }
 
 impl AppState {
@@ -117,7 +117,7 @@ impl AppState {
             planner_excluded: RwSignal::new(ls_get(keys::PLANNER_EXCLUDED).unwrap_or_default()),
             positions: RwSignal::new(None),
             positions_subs: RwSignal::new(0),
-            positions_in_flight: RwSignal::new(false),
+            positions_in_flight: RwSignal::new(None),
         };
         // Odvozené hodnoty potřebují hotový stav.
         s.watched = crate::alerts::make_watched(s);
