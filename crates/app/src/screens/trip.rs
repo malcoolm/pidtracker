@@ -1,19 +1,24 @@
 //! Detail spoje: všechny zastávky z jízdního řádu, časy se zpožděním a poloha vozu.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use pid_core::alerts::ServiceAlert;
-use pid_core::realtime::{Delays, VehicleFix, VehiclePlace, place_vehicle};
+use pid_core::realtime::{Delays, FixFreshness, VehicleFix, VehiclePlace, fix_freshness, place_vehicle};
 use pid_core::timetable::query::{BoardRow, TripRoute};
 
 use crate::components::{DepTime, RouteBadge};
 use crate::state::{AppState, Screen};
-use crate::util::{css_color, now};
+use crate::util::{css_color, now, page_hidden};
 
 /// Kolik zastávek před vozem (nebo nástupem) a za nástupem ukázat při sbalené trase.
 const CONTEXT_BEFORE: usize = 2;
 const CONTEXT_AFTER: usize = 5;
+/// Jak často se přepočítá stáří polohy, i když nová data nepřišla (offline).
+const TICK_MS: u32 = 15_000;
 
 /// „před 20 s“ / „před 3 min“ podle časové značky polohy.
 fn age_label(timestamp: Option<i64>, now_ts: i64) -> Option<String> {
@@ -28,6 +33,9 @@ fn vehicle_text(fix: &VehicleFix, now_ts: i64) -> String {
     };
     if let Some(age) = age_label(fix.timestamp, now_ts) {
         s.push_str(" · ");
+        if fix_freshness(fix.timestamp, now_ts) == FixFreshness::Stale {
+            s.push_str("poloha ");
+        }
         s.push_str(&age);
     }
     s
@@ -65,9 +73,17 @@ pub fn TripDetail(
     // Poloha vozu ze sdíleného úložiště (#14): obnova po 20 s, dokud je detail otevřený.
     crate::positions::subscribe(state);
     let trip_id = row.dep.trip_gtfs_id.clone();
+    // Poloha starší než 10 min se na trase nezobrazuje (#12).
     let vehicle = {
         let trip_id = trip_id.clone();
-        Memo::new(move |_| state.positions.with(|p| p.as_ref().and_then(|p| p.fixes.get(&trip_id).cloned())))
+        Memo::new(move |_| {
+            let now_ts = at.get().timestamp();
+            state.positions.with(|p| {
+                p.as_ref()
+                    .and_then(|p| p.fixes.get(&trip_id).cloned())
+                    .filter(|f| fix_freshness(f.timestamp, now_ts) != FixFreshness::Expired)
+            })
+        })
     };
     let loaded = Memo::new(move |_| state.positions.with(Option::is_some));
     // Nová data → přepočítat stáří polohy a časy.
@@ -75,6 +91,23 @@ pub fn TripDetail(
         state.positions.track();
         at.set(now());
     });
+    // Stáří polohy roste i bez nových dat (offline), proto hodiny tikají samy.
+    {
+        let alive = Arc::new(AtomicBool::new(true));
+        let flag = alive.clone();
+        on_cleanup(move || flag.store(false, Ordering::Relaxed));
+        spawn_local(async move {
+            loop {
+                TimeoutFuture::new(TICK_MS).await;
+                if !alive.load(Ordering::Relaxed) {
+                    break;
+                }
+                if !page_hidden() {
+                    at.set(now());
+                }
+            }
+        });
+    }
 
     let place = Memo::new(move |_| vehicle.with(|v| v.as_ref().and_then(|f| place_vehicle(&coords, f))));
 
@@ -99,7 +132,10 @@ pub fn TripDetail(
             let fix = vehicle.get();
             let now_ts = t.timestamp();
             let label = |fix: &Option<VehicleFix>| {
-                fix.as_ref().map(|f| view! { <div class="trip-vehicle">{vehicle_text(f, now_ts)}</div> }.into_any())
+                fix.as_ref().map(|f| {
+                    let stale = fix_freshness(f.timestamp, now_ts) == FixFreshness::Stale;
+                    view! { <div class="trip-vehicle" class:stale=stale>{vehicle_text(f, now_ts)}</div> }.into_any()
+                })
             };
             let mut out = Vec::new();
             if head_hidden > 0 {
@@ -179,6 +215,17 @@ mod tests {
         assert_eq!(age_label(Some(100), 400).as_deref(), Some("před 5 min"));
         assert_eq!(age_label(Some(100), 90).as_deref(), Some("před 0 s"));
         assert_eq!(age_label(None, 90), None);
+    }
+
+    fn fix(timestamp: i64) -> VehicleFix {
+        VehicleFix { label: Some("8758".into()), lat: 50.0, lon: 14.0, stop_sequence: None, timestamp: Some(timestamp) }
+    }
+
+    #[test]
+    fn vehicle_text_fresh_and_stale() {
+        assert_eq!(vehicle_text(&fix(1_000), 1_030), "🚋 vůz 8758 · před 30 s");
+        assert_eq!(vehicle_text(&fix(1_000), 1_090), "🚋 vůz 8758 · před 1 min");
+        assert_eq!(vehicle_text(&fix(1_000), 1_180), "🚋 vůz 8758 · poloha před 3 min");
     }
 
     #[test]

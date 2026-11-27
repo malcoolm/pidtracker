@@ -221,6 +221,32 @@ pub fn should_fetch_positions(subscribers: u32, hidden: bool, in_flight_ms: Opti
     subscribers > 0 && !hidden && !fetching && age_ms.is_none_or(|a| !(0.0..POSITIONS_MAX_AGE_MS).contains(&a))
 }
 
+/// Jak stará je poloha vozu (#12).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FixFreshness {
+    /// Do 2 min: zobrazit normálně.
+    Fresh,
+    /// 2–10 min: zobrazit zašedle s „poloha před N min“.
+    Stale,
+    /// Nad 10 min: na trase nezobrazovat.
+    Expired,
+}
+
+/// Od kolika sekund je poloha zastaralá.
+pub const FIX_STALE_S: i64 = 120;
+/// Od kolika sekund se poloha nezobrazuje.
+pub const FIX_EXPIRED_S: i64 = 600;
+
+/// Stáří polohy podle její časové značky. Bez značky nebo se značkou v budoucnosti
+/// (posunuté hodiny) se nedá stáří určit, poloha se bere jako čerstvá.
+pub fn fix_freshness(timestamp: Option<i64>, now_ts: i64) -> FixFreshness {
+    match timestamp.map(|t| now_ts - t) {
+        Some(age) if age > FIX_EXPIRED_S => FixFreshness::Expired,
+        Some(age) if age > FIX_STALE_S => FixFreshness::Stale,
+        _ => FixFreshness::Fresh,
+    }
+}
+
 /// Kde na trase vůz je.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VehiclePlace {
@@ -622,5 +648,34 @@ mod store_tests {
         assert!(!should_fetch_positions(1, false, Some(29_000.0), Some(60_000.0)));
         assert!(should_fetch_positions(1, false, Some(30_000.0), Some(60_000.0)));
         assert!(should_fetch_positions(1, false, Some(-5.0), Some(60_000.0)));
+    }
+}
+
+#[cfg(test)]
+mod freshness_tests {
+    use super::*;
+
+    #[test]
+    fn fresh_up_to_two_minutes() {
+        assert_eq!(fix_freshness(Some(1_000), 1_000), FixFreshness::Fresh);
+        assert_eq!(fix_freshness(Some(1_000), 1_060), FixFreshness::Fresh);
+        assert_eq!(fix_freshness(Some(1_000), 1_120), FixFreshness::Fresh);
+    }
+
+    #[test]
+    fn stale_after_two_minutes() {
+        assert_eq!(fix_freshness(Some(1_000), 1_121), FixFreshness::Stale);
+        assert_eq!(fix_freshness(Some(1_000), 1_600), FixFreshness::Stale);
+    }
+
+    #[test]
+    fn expired_after_ten_minutes() {
+        assert_eq!(fix_freshness(Some(1_000), 1_601), FixFreshness::Expired);
+    }
+
+    #[test]
+    fn unknown_or_future_timestamp_is_fresh() {
+        assert_eq!(fix_freshness(None, 1_000), FixFreshness::Fresh);
+        assert_eq!(fix_freshness(Some(2_000), 1_000), FixFreshness::Fresh);
     }
 }

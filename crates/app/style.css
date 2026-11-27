@@ -704,6 +704,8 @@ html.vanoce :is(.history, .stats, .alerts) > h2 { padding-right: 56px; }
   color: var(--warn-text);
   font-weight: 500;
 }
+/* Poloha starší než 2 min (#12): zašedlá. */
+.trip-vehicle.stale { background: var(--border); color: var(--muted); font-weight: 400; }
 
 /* Mimořádnosti; html.has-banner posune překryvy (menu, detail spoje) pod pruh */
 html.has-banner { --banner-h: 44px; }

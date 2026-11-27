@@ -307,3 +307,12 @@ Do 28. 11. 2026 vynutíte adresou `?vanoce=1` v Safari.
 - [ ] Režim letadlo s otevřeným detailem: zůstane poslední poloha, aplikace nespadne.
 - [ ] Nastavení → Mobilní data → Safari/PID Tracker: po pár minutách na úvodní obrazovce
       (bez otevřeného detailu) spotřeba dat neroste.
+
+## Kontrolní bod P – stáří polohy vozu (#12)
+
+- [ ] Odjezdy → `›` u jedoucího spoje: čerstvá poloha je v oranžovém štítku „🚋 vůz 1234 ·
+      před 20 s“.
+- [ ] Otevřít detail a zapnout režim letadlo: po víc než 2 minutách je štítek zašedlý
+      s textem „poloha před N min“ (čitelný ve světlém i tmavém režimu i o Vánocích).
+- [ ] Po víc než 10 minutách v režimu letadlo vůz z trasy zmizí, zobrazí se „Poloha vozu
+      není k dispozici.“ a jízdní řád funguje dál.
