@@ -33,7 +33,7 @@ enum LineChoice {
     /// Nejbližší nadcházející spoj (výchozí).
     Auto,
     /// Ručně vybraný spoj; drží se, i když ze seznamu zmizí.
-    Trip(BoardRow),
+    Trip(Box<BoardRow>),
     Manual,
 }
 
@@ -64,7 +64,7 @@ fn DepRow(
             <button
                 class="dep-row"
                 class:selected=move || selected.get() == Some(key)
-                on:click=move |_| choice.set(LineChoice::Trip(picked.clone()))
+                on:click=move |_| choice.set(LineChoice::Trip(Box::new(picked.clone())))
             >
                 <RouteBadge name=d.route_short_name.clone() color=d.color />
                 <span class="dep-head">{d.headsign.clone()}</span>
